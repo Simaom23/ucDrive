@@ -6,16 +6,11 @@ import java.io.*;
 
 public class Client {
     private static int serversocket = 6000;
+    private static String serverhostname = "0.0.0.0";
 
     public static void main(String args[]) {
-        // args[0] <- hostname of destination
-        if (args.length == 0) {
-            System.out.println("java Client hostname");
-            System.exit(0);
-        }
-
         // Socket creation
-        try (Socket s = new Socket(args[0], serversocket)) {
+        try (Socket s = new Socket(serverhostname, serversocket)) {
             System.out.println("### - Connected to ucDrive - ####");
 
             // Input and output stream
@@ -27,19 +22,19 @@ public class Client {
                     // Get username
                     System.out.print("Username: ");
                     String username = sc.nextLine();
+                    out.writeUTF(username);
 
                     // Get password
                     System.out.print("Password: ");
                     String password = sc.nextLine();
-
-                    // Send username and password to server
-                    out.writeUTF(username);
                     out.writeUTF(password);
 
                     // Server auth
                     String auth = in.readUTF();
                     if (auth == "true")
                         break;
+                    else
+                        System.out.print("Not valid!");
                 }
             }
 

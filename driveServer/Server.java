@@ -1,26 +1,22 @@
 package driveServer;
 
-// TCPServer2.java: Multithreaded server
 import java.net.*;
-import java.util.LinkedList;
 import java.io.*;
 
+// Primary server
 public class Server {
     private static int serverPort = 6000;
 
     public static void main(String args[]) {
-        int numero = 0;
-        Socket[] socketList = new Socket[2];
-
+        int num = 0;
         try (ServerSocket listenSocket = new ServerSocket(serverPort)) {
-            System.out.println("A escuta no porto 6000");
-            System.out.println("LISTEN SOCKET=" + listenSocket);
+            System.out.println("Listening On -> " + listenSocket);
+            System.out.println("### - Server Info - ###");
             while (true) {
                 Socket clientSocket = listenSocket.accept(); // BLOQUEANTE
-                socketList[numero] = clientSocket;
-                System.out.println("CLIENT_SOCKET (created at accept())=" + clientSocket);
-                numero++;
-                new Connection(clientSocket, numero, socketList);
+                System.out.println("New Connection -> " + clientSocket);
+                num++;
+                new Connection(clientSocket, num);
             }
         } catch (IOException e) {
             System.out.println("Listen:" + e.getMessage());
@@ -28,41 +24,30 @@ public class Server {
     }
 }
 
-// = Thread para tratar de cada canal de comunicação com um cliente
+// Thread to deal with each user
 class Connection extends Thread {
     DataInputStream in;
     DataOutputStream out;
     Socket clientSocket;
     int thread_number;
-    Socket[] socketL;
 
-    public Connection(Socket aClientSocket, int numero, Socket[] socketList) {
-        thread_number = numero;
+    public Connection(Socket aClientSocket, int num) {
         try {
+            thread_number = num;
             clientSocket = aClientSocket;
-            socketL = socketList;
             in = new DataInputStream(clientSocket.getInputStream());
+            out = new DataOutputStream(clientSocket.getOutputStream());
             this.start();
         } catch (IOException e) {
             System.out.println("Connection:" + e.getMessage());
         }
     }
 
-    // =============================
     public void run() {
-        String resposta;
         try {
             while (true) {
-                // an echo server
-                String data = in.readUTF();
-                resposta = "T[" + thread_number + "]: " + data;
-                System.out.println("T[" + thread_number + "] Recebeu: " + data);
-                for (int i = 0; i < socketL.length; i++) {
-                    if (i != thread_number - 1) {
-                        out = new DataOutputStream(socketL[i].getOutputStream());
-                        out.writeUTF(resposta);
-                    }
-                }
+                String username = in.readUTF();
+                String password = in.readUTF();
             }
         } catch (EOFException e) {
             System.out.println("EOF:" + e);
