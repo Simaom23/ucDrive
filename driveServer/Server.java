@@ -80,8 +80,7 @@ class Connection extends Thread {
                         break;
 
                     case "cd":
-                        if (new File("driveServer/Users/" + currentDir).isDirectory())
-                            return;
+                        changeDir();
                         break;
                 }
             }
@@ -162,6 +161,39 @@ class Connection extends Thread {
             }
             out.writeUTF(directories);
         } catch (EOFException e) {
+            System.out.println("EOF:" + e);
+        } catch (IOException e) {
+            System.out.println("IO:" + e);
+        }
+    }
+
+    private void changeDir() {
+        try {
+            String newDir = in.readUTF();
+            if (newDir.equals("..") && !currentDir.equals("home")) {
+                String[] directory = currentDir.split("/");
+                String current = "";
+                for (int i = 0; i < directory.length - 1; i++) {
+                    if (i != directory.length - 2)
+                        current += directory[i] + "/";
+                    else
+                        current += directory[i];
+                }
+                currentDir = current;
+            } else if (newDir.equals("/") || newDir.equals("home"))
+                currentDir = "home";
+            else if (!newDir.equals("home") && !newDir.equals(".")) {
+                String specialChars = "/\\<>:\"|?*";
+                if (!specialChars.contains(Character.toString(newDir.charAt(0)))) {
+                    File dir = new File("driveServer/Users/" + username + "/home/" + newDir);
+                    if (dir.isDirectory())
+                        currentDir = currentDir + "/" + newDir;
+                }
+            }
+
+        } catch (
+
+        EOFException e) {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
             System.out.println("IO:" + e);

@@ -31,9 +31,15 @@ public class Client {
                     String currentDir = in.readUTF();
                     System.out.print(currentDir + "> ");
 
-                    String command = sc.nextLine();
-                    out.writeUTF(command);
-                    switch (command) {
+                    String[] command = sc.nextLine().trim().split("\\s+");
+                    if (command.length > 1 && command[1].charAt(0) == '-') {
+                        command[0] = command[0] + " " + command[1];
+                        for (int i = 2; i < command.length; i++)
+                            command[i - 1] = command[i];
+                    }
+
+                    out.writeUTF(command[0]);
+                    switch (command[0]) {
                         case "passwd":
                             changePasswd(sc);
                             break;
@@ -43,12 +49,18 @@ public class Client {
                             break;
 
                         case "cd":
+                            out.writeUTF(command[1]);
+                            break;
+
+                        case "cd -p":
+                            changeUserDir(sc, command[1]);
                             break;
 
                         case "ls -p":
                             listUserFiles(sc);
                             break;
                     }
+
                 }
             }
 
@@ -139,5 +151,28 @@ public class Client {
                 System.out.print(file + "\t");
         }
         System.out.println();
+    }
+
+    private static void changeUserDir(Scanner sc, String newDir) {
+        if (newDir.equals("..")) {
+            String[] directory = currentDir.split("/");
+            String current = "";
+            for (int i = 0; i < directory.length - 1; i++) {
+                if (i != directory.length - 2)
+                    current += directory[i] + "/";
+                else
+                    current += directory[i];
+            }
+            currentDir = current;
+        } else if (newDir.equals("/"))
+            currentDir = "home";
+        else if (!newDir.equals(".")) {
+            String specialChars = "/\\<>:\"|?*";
+            if (!specialChars.contains(Character.toString(newDir.charAt(0)))) {
+                File dir = new File(currentDir + "/" + newDir);
+                if (dir.isDirectory())
+                    currentDir = currentDir + "/" + newDir;
+            }
+        }
     }
 }
