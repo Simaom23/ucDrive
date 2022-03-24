@@ -11,7 +11,7 @@ public class Client {
     public static final String RESET = "\u001B[0m";
     public static DataInputStream in;
     public static DataOutputStream out;
-    public static String currentDir = System.getProperty("user.dir");
+    public static String currentDir = System.getProperty("user.dir").replace("\\", "/");
 
     public static void main(String args[]) {
         // Socket creation
@@ -126,11 +126,10 @@ public class Client {
             String[] fileList = files.split(" ");
             for (String file : fileList) {
                 if (file.charAt(0) == '/')
-                    System.out.print(GREEN + file.substring(1) + RESET + "\t");
+                    System.out.println(GREEN + file.substring(1) + RESET);
                 else
-                    System.out.print(file + "\t");
+                    System.out.println(file);
             }
-            System.out.println();
         } catch (IOException e) {
             System.out.println("IO:" + e.getMessage());
         }
@@ -146,26 +145,29 @@ public class Client {
         }
         for (String file : fileList) {
             if (file.charAt(0) == '/')
-                System.out.print(GREEN + file.substring(1) + RESET + "\t");
+                System.out.println(GREEN + file.substring(1) + RESET);
             else
-                System.out.print(file + "\t");
+                System.out.println(file);
         }
-        System.out.println();
     }
 
     private static void changeUserDir(Scanner sc, String newDir) {
         if (newDir.equals("..")) {
             String[] directory = currentDir.split("/");
             String current = "";
-            for (int i = 0; i < directory.length - 1; i++) {
-                if (i != directory.length - 2)
-                    current += directory[i] + "/";
-                else
-                    current += directory[i];
+            if (directory.length != 1) {
+                for (int i = 0; i < directory.length - 1; i++) {
+                    if (i != directory.length - 2)
+                        current += directory[i] + "/";
+                    else
+                        current += directory[i];
+                }
+                currentDir = current;
+                if (currentDir.charAt(currentDir.length() - 1) == ':')
+                    currentDir = currentDir + "/";
             }
-            currentDir = current;
         } else if (newDir.equals("/"))
-            currentDir = "home";
+            currentDir = "C:/";
         else if (!newDir.equals(".")) {
             String specialChars = "/\\<>:\"|?*";
             if (!specialChars.contains(Character.toString(newDir.charAt(0)))) {
