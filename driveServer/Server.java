@@ -203,12 +203,10 @@ class Connection extends Thread {
             } else if (newDir.equals("/") || newDir.equals("home"))
                 currentDir = "home";
             else if (!newDir.equals("home") && !newDir.equals(".")) {
-                String specialChars = "/\\<>:\"|?*";
-                if (!specialChars.contains(Character.toString(newDir.charAt(0)))) {
-                    File dir = new File(root + "/" + username + "/home/" + newDir);
-                    if (dir.isDirectory())
-                        currentDir = currentDir + "/" + newDir;
-                }
+                newDir.replace("[/\\<>:\"|?*]", "%20");
+                File dir = new File(root + "/" + username + "/home/" + newDir);
+                if (dir.isDirectory())
+                    currentDir = currentDir + "/" + newDir;
             }
 
         } catch (EOFException e) {
