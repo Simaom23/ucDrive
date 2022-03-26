@@ -1,69 +1,97 @@
 package driveClient;
 
 import java.net.*;
+import java.nio.file.Files;
+import java.util.Properties;
 import java.util.Scanner;
 import java.io.*;
 
 public class Client {
-    private static int serversocket = 6000;
-    private static String serverhostname = "0.0.0.0";
+    private static String config = "driveClient/settings.properties";
+    private static Properties server = new Properties();
+    private static String serverhostname;
+    private static int serversocket;
     public static final String GREEN = "\u001B[32m";
     public static final String RESET = "\u001B[0m";
     public static DataInputStream in;
     public static DataOutputStream out;
+    public static InputStream inData;
+    public static OutputStream outData;
     public static String currentDir = System.getProperty("user.dir").replace("\\", "/");
 
     public static void main(String args[]) {
+        try (InputStream conf = new FileInputStream(config)) {
+            server.load(conf);
+            conf.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+
+        serverhostname = server.getProperty("primary.server");
+        serversocket = Integer.parseInt(server.getProperty("primary.port"));
+
         // Socket creation
-        try (Socket s = new Socket(serverhostname, serversocket)) {
-            System.out.println("Welcome to ucDrive 1.0");
+        try (Socket c = new Socket(serverhostname, serversocket)) {
+            try (Socket d = new Socket(serverhostname, serversocket + 500)) {
+                System.out.println("Welcome to ucDrive 1.0");
 
-            // Input and output stream
-            in = new DataInputStream(s.getInputStream());
-            out = new DataOutputStream(s.getOutputStream());
+                // Input and output stream
+                in = new DataInputStream(c.getInputStream());
+                out = new DataOutputStream(c.getOutputStream());
 
-            try (Scanner sc = new Scanner(System.in)) {
-                while (true) {
-                    String checkAuth = in.readUTF();
-                    if (checkAuth.equals("false"))
-                        authentication(sc);
+                inData = d.getInputStream();
+                outData = d.getOutputStream();
 
-                    String currentDir = in.readUTF();
-                    System.out.print(currentDir + "> ");
+                try (Scanner sc = new Scanner(System.in)) {
+                    while (true) {
+                        String checkAuth = in.readUTF();
+                        if (checkAuth.equals("false"))
+                            authentication(sc);
 
-                    String[] command = sc.nextLine().trim().split("\\s+");
-                    if (command.length > 1 && command[1].charAt(0) == '-') {
-                        command[0] = command[0] + " " + command[1];
-                        for (int i = 2; i < command.length; i++)
-                            command[i - 1] = command[i];
+                        String currentDir = in.readUTF();
+                        System.out.print(currentDir + "> ");
+
+                        String[] command = sc.nextLine().trim().split("\\s+");
+                        if (command.length > 1 && command[1].charAt(0) == '-') {
+                            command[0] = command[0] + " " + command[1];
+                            for (int i = 2; i < command.length; i++)
+                                command[i - 1] = command[i];
+                        }
+
+                        out.writeUTF(command[0]);
+                        switch (command[0]) {
+                            case "passwd":
+                                changePasswd(sc);
+                                break;
+
+                            case "ls":
+                                listDriveFiles(sc);
+                                break;
+
+                            case "cd":
+                                out.writeUTF(command[1]);
+                                break;
+
+                            case "cd -p":
+                                changeUserDir(sc, command[1]);
+                                break;
+
+                            case "ls -p":
+                                listUserFiles(sc);
+                                break;
+
+                            case "get":
+                                getFile(sc, command[1]);
+                                break;
+
+                            case "put":
+                                putFile(command[1]);
+                                break;
+                        }
+
                     }
-
-                    out.writeUTF(command[0]);
-                    switch (command[0]) {
-                        case "passwd":
-                            changePasswd(sc);
-                            break;
-
-                        case "ls":
-                            listDriveFiles(sc);
-                            break;
-
-                        case "cd":
-                            out.writeUTF(command[1]);
-                            break;
-
-                        case "cd -p":
-                            changeUserDir(sc, command[1]);
-                            break;
-
-                        case "ls -p":
-                            listUserFiles(sc);
-                            break;
-                    }
-
                 }
             }
-
         } catch (UnknownHostException e) {
             System.out.println("Sock:" + e.getMessage());
         } catch (EOFException e) {
@@ -175,6 +203,90 @@ public class Client {
                 if (dir.isDirectory())
                     currentDir = currentDir + "/" + newDir;
             }
+        }
+    }
+
+    private static void getFile(Scanner sc, String file) {
+        try {
+            out.writeUTF(file);
+            String answer = in.readUTF();
+            if (answer.equals("true")) {
+                Long fileSize = Long.parseLong(in.readUTF());
+                String[] fileName = file.split("/");
+                byte[] b = new byte[1024];
+                FileOutputStream newFile = new FileOutputStream(currentDir + "/" + fileName[fileName.length - 1]);
+                BufferedOutputStream bos = new BufferedOutputStream(newFile);
+                int read = 0;
+                long bytesRead = 0;
+                int lastProgress = 0;
+                while (bytesRead != fileSize) {
+                    read = inData.read(b);
+                    bytesRead += read;
+                    bos.write(b, 0, read);
+                    int progress = (int) ((bytesRead * 100) / fileSize);
+                    if (lastProgress != progress) {
+                        System.out.print(GREEN +
+                                "Downloading " + fileName[fileName.length - 1] + " [" + RESET);
+                        for (int i = 0; i < progress / 2; i++)
+                            System.out.print(GREEN + "#" + RESET);
+                        System.out.print(GREEN + "] " + progress + "%\r" + RESET);
+                        lastProgress = progress;
+                    }
+
+                }
+                System.out.flush();
+                System.out.println(GREEN + "\n" + fileName[fileName.length - 1] + " Downloaded!" + RESET);
+                bos.flush();
+                newFile.close();
+            } else
+                System.out.println(answer);
+        } catch (IOException e) {
+            System.out.println("IO:" + e.getMessage());
+        }
+    }
+
+    private static void putFile(String file) {
+        try {
+            out.writeUTF(file);
+            File f = new File(currentDir + "/" + file);
+            if (Files.isReadable(f.toPath())) {
+                long fileLength = f.length();
+                out.writeUTF(Long.toString(fileLength));
+                FileInputStream send = new FileInputStream(currentDir + "/" + file);
+                BufferedInputStream bis = new BufferedInputStream(send);
+                byte[] b;
+                int byteSize = 1024;
+                long sent = 0;
+                int lastProgress = 0;
+                while (sent < fileLength) {
+                    if (fileLength - sent >= byteSize)
+                        sent += byteSize;
+                    else {
+                        byteSize = (int) (fileLength - sent);
+                        sent = fileLength;
+                    }
+                    b = new byte[byteSize];
+                    bis.read(b, 0, b.length);
+                    outData.write(b, 0, b.length);
+                    int progress = (int) ((sent * 100) / fileLength);
+                    if (lastProgress != progress) {
+                        System.out.print(GREEN +
+                                "Uploading " + file + " [" + RESET);
+                        for (int i = 1; i < progress / 2; i++)
+                            System.out.print(GREEN + "#" + RESET);
+                        System.out.print(GREEN + "] " + progress + "%\r" + RESET);
+                        lastProgress = progress;
+                    }
+                }
+                System.out.flush();
+                System.out.println(GREEN + "\n" + file + " Uploaded!" + RESET);
+                send.close();
+            } else
+                out.writeUTF("put: file does not exist");
+        } catch (EOFException e) {
+            System.out.println("EOF:" + e);
+        } catch (IOException e) {
+            System.out.println("IO:" + e);
         }
     }
 }

@@ -1,32 +1,38 @@
 package driveServer;
 
 import java.net.*;
+import java.nio.file.Files;
 import java.io.*;
 import java.util.Properties;
 
 // Primary server
 public class Server {
     private static int serverPort = 6000;
+    private static int dataPort = 6500;
     public static String usersFile = "driveServer/users.properties";
     public static Properties users = new Properties();
 
     public static void main(String args[]) {
         int num = 0;
         try (ServerSocket listenSocket = new ServerSocket(serverPort)) {
-            System.out.println("Listening On -> " + listenSocket);
-            System.out.println("### - ucDrive Server Info - ###");
-            try (InputStream in = new FileInputStream(usersFile)) {
-                Server.users.load(in);
-                in.close();
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+            try (ServerSocket dataSocket = new ServerSocket(dataPort)) {
+                System.out.println("Listening On -> " + listenSocket);
+                System.out.println("### - ucDrive Server Info - ###");
+                try (InputStream in = new FileInputStream(usersFile)) {
+                    Server.users.load(in);
+                    in.close();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
 
-            while (true) {
-                Socket clientSocket = listenSocket.accept(); // BLOQUEANTE
-                num++;
-                System.out.println("[" + num + "] " + "New Connection -> " + clientSocket);
-                new Connection(clientSocket, num);
+                while (true) {
+                    Socket clientCommandSocket = listenSocket.accept();
+                    Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
+                    num++;
+                    System.out.println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket
+                            + "\n-> Data Socket: " + clientDataSocket);
+                    new Connection(clientCommandSocket, clientDataSocket, num);
+                }
             }
         } catch (IOException e) {
             System.out.println("Listen:" + e.getMessage());
@@ -38,19 +44,24 @@ public class Server {
 class Connection extends Thread {
     DataInputStream in;
     DataOutputStream out;
-    Socket clientSocket;
+    InputStream inData;
+    OutputStream outData;
+    Socket clientCommandSocket;
+    Socket clientDataSocket;
     int thread_number;
     boolean auth = false;
     Properties users = Server.users;
     String username;
     String currentDir = "home";
 
-    public Connection(Socket aClientSocket, int num) {
+    public Connection(Socket commandClientSocket, Socket dataClientSocket, int num) {
         try {
             thread_number = num;
-            clientSocket = aClientSocket;
-            in = new DataInputStream(clientSocket.getInputStream());
-            out = new DataOutputStream(clientSocket.getOutputStream());
+            clientCommandSocket = commandClientSocket;
+            in = new DataInputStream(clientCommandSocket.getInputStream());
+            out = new DataOutputStream(clientCommandSocket.getOutputStream());
+            inData = dataClientSocket.getInputStream();
+            outData = dataClientSocket.getOutputStream();
             this.start();
         } catch (IOException e) {
             System.out.println("Connection:" + e.getMessage());
@@ -81,6 +92,14 @@ class Connection extends Thread {
 
                     case "cd":
                         changeDir();
+                        break;
+
+                    case "get":
+                        getFile();
+                        break;
+
+                    case "put":
+                        putFile();
                         break;
                 }
             }
@@ -191,12 +210,70 @@ class Connection extends Thread {
                 }
             }
 
-        } catch (
-
-        EOFException e) {
+        } catch (EOFException e) {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
             System.out.println("IO:" + e);
+        }
+    }
+
+    private void getFile() {
+        try {
+            String file = in.readUTF();
+            File f = new File("driveServer/Users/" + username + "/" + currentDir + "/" + file);
+            if (Files.isReadable(f.toPath())) {
+                out.writeUTF("true");
+                long fileLength = f.length();
+                out.writeUTF(Long.toString(fileLength));
+                FileInputStream send = new FileInputStream(
+                        "driveServer/Users/" + username + "/" + currentDir + "/" + file);
+                BufferedInputStream bis = new BufferedInputStream(send);
+                byte[] b;
+                int byteSize = 1024;
+                long sent = 0;
+                while (sent < fileLength) {
+                    if (fileLength - sent >= byteSize)
+                        sent += byteSize;
+                    else {
+                        byteSize = (int) (fileLength - sent);
+                        sent = fileLength;
+                    }
+                    b = new byte[byteSize];
+                    bis.read(b, 0, b.length);
+                    outData.write(b, 0, b.length);
+                }
+                send.close();
+            } else
+                out.writeUTF("get: file does not exist");
+        } catch (EOFException e) {
+            System.out.println("EOF:" + e);
+        } catch (IOException e) {
+            System.out.println("IO:" + e);
+        }
+    }
+
+    private void putFile() {
+        try {
+            String file = in.readUTF();
+            Long fileSize = Long.parseLong(in.readUTF());
+            String[] fileName = file.split("/");
+            byte[] b = new byte[1024];
+            FileOutputStream newFile = new FileOutputStream(
+                    "driveServer/Users/" + username + "/" + currentDir + "/" + fileName[fileName.length - 1]);
+            BufferedOutputStream bos = new BufferedOutputStream(newFile);
+            int read = 0;
+            long bytesRead = 0;
+            while (bytesRead != fileSize) {
+                read = inData.read(b);
+                bytesRead += read;
+                bos.write(b, 0, read);
+            }
+            bos.flush();
+            newFile.close();
+        } catch (
+
+        IOException e) {
+            System.out.println("IO:" + e.getMessage());
         }
     }
 }
