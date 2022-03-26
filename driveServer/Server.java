@@ -53,6 +53,7 @@ class Connection extends Thread {
     Properties users = Server.users;
     String username;
     String currentDir = "home";
+    String root = System.getProperty("user.dir").replace("\\", "/") + "/driveServer/Users";
 
     public Connection(Socket commandClientSocket, Socket dataClientSocket, int num) {
         try {
@@ -124,7 +125,7 @@ class Connection extends Thread {
                     out.writeUTF("false");
             }
 
-            File home = new File("driveServer/Users/" + username + "/home");
+            File home = new File(root + "/" + username + "/home");
             if (!home.exists() && !home.isDirectory())
                 home.mkdirs();
 
@@ -168,14 +169,14 @@ class Connection extends Thread {
 
     private void listFiles() {
         try {
-            File dir = new File("driveServer/Users/" + username + "/" + currentDir);
+            File dir = new File(root + "/" + username + "/" + currentDir);
             String[] fileList = dir.list();
             String directories = "";
             for (int i = 0; i < fileList.length; i++) {
-                if (new File("driveServer/Users/" + username + "/" + currentDir + "/" + fileList[i])
-                        .isDirectory()) {
+                fileList[i] = fileList[i].replace(" ", "%20");
+                if (new File(root + "/" + username + "/" + currentDir + "/" + fileList[i])
+                        .isDirectory())
                     fileList[i] = "/" + fileList[i];
-                }
                 directories += fileList[i] + " ";
             }
             out.writeUTF(directories);
@@ -204,7 +205,7 @@ class Connection extends Thread {
             else if (!newDir.equals("home") && !newDir.equals(".")) {
                 String specialChars = "/\\<>:\"|?*";
                 if (!specialChars.contains(Character.toString(newDir.charAt(0)))) {
-                    File dir = new File("driveServer/Users/" + username + "/home/" + newDir);
+                    File dir = new File(root + "/" + username + "/home/" + newDir);
                     if (dir.isDirectory())
                         currentDir = currentDir + "/" + newDir;
                 }
@@ -220,13 +221,13 @@ class Connection extends Thread {
     private void getFile() {
         try {
             String file = in.readUTF();
-            File f = new File("driveServer/Users/" + username + "/" + currentDir + "/" + file);
+            File f = new File(root + "/" + username + "/" + currentDir + "/" + file);
             if (Files.isReadable(f.toPath())) {
                 out.writeUTF("true");
                 long fileLength = f.length();
                 out.writeUTF(Long.toString(fileLength));
                 FileInputStream send = new FileInputStream(
-                        "driveServer/Users/" + username + "/" + currentDir + "/" + file);
+                        root + "/" + username + "/" + currentDir + "/" + file);
                 BufferedInputStream bis = new BufferedInputStream(send);
                 byte[] b;
                 int byteSize = 1024;
@@ -255,24 +256,26 @@ class Connection extends Thread {
     private void putFile() {
         try {
             String file = in.readUTF();
-            Long fileSize = Long.parseLong(in.readUTF());
-            String[] fileName = file.split("/");
-            byte[] b = new byte[1024];
-            FileOutputStream newFile = new FileOutputStream(
-                    "driveServer/Users/" + username + "/" + currentDir + "/" + fileName[fileName.length - 1]);
-            BufferedOutputStream bos = new BufferedOutputStream(newFile);
-            int read = 0;
-            long bytesRead = 0;
-            while (bytesRead != fileSize) {
-                read = inData.read(b);
-                bytesRead += read;
-                bos.write(b, 0, read);
+            String answer = in.readUTF();
+            if (!answer.equals("cancel")) {
+                Long fileSize = Long.parseLong(answer);
+                String[] fileName = file.split("/");
+                byte[] b = new byte[1024];
+                FileOutputStream newFile = new FileOutputStream(
+                        root + "/" + username + "/" + currentDir + "/"
+                                + fileName[fileName.length - 1]);
+                BufferedOutputStream bos = new BufferedOutputStream(newFile);
+                int read = 0;
+                long bytesRead = 0;
+                while (bytesRead != fileSize) {
+                    read = inData.read(b);
+                    bytesRead += read;
+                    bos.write(b, 0, read);
+                }
+                bos.flush();
+                newFile.close();
             }
-            bos.flush();
-            newFile.close();
-        } catch (
-
-        IOException e) {
+        } catch (IOException e) {
             System.out.println("IO:" + e.getMessage());
         }
     }

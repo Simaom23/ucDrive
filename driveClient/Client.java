@@ -52,10 +52,20 @@ public class Client {
                         System.out.print(currentDir + "> ");
 
                         String[] command = sc.nextLine().trim().split("\\s+");
-                        if (command.length > 1 && command[1].charAt(0) == '-') {
-                            command[0] = command[0] + " " + command[1];
-                            for (int i = 2; i < command.length; i++)
-                                command[i - 1] = command[i];
+                        if (command.length > 1) {
+                            if (command[1].charAt(0) == '-') {
+                                command[0] = command[0] + " " + command[1];
+                                command[1] = "";
+                                for (int i = 2; i < command.length; i++)
+                                    if (i != command.length - 1)
+                                        command[1] += command[i] + " ";
+                                    else
+                                        command[1] += command[i];
+                            } else {
+                                for (int i = 2; i < command.length; i++)
+                                    command[1] = command[1] + " " + command[i];
+                            }
+                            command[1].replace("[/\\<>:\"|?*]", "%20");
                         }
 
                         out.writeUTF(command[0]);
@@ -153,9 +163,10 @@ public class Client {
             String files = in.readUTF();
             String[] fileList = files.split(" ");
             for (String file : fileList) {
-                if (file.charAt(0) == '/')
+                file = file.replace("%20", " ");
+                if (file.charAt(0) == '/') {
                     System.out.println(GREEN + file.substring(1) + RESET);
-                else
+                } else
                     System.out.println(file);
             }
         } catch (IOException e) {
@@ -197,12 +208,10 @@ public class Client {
         } else if (newDir.equals("/"))
             currentDir = "C:/";
         else if (!newDir.equals(".")) {
-            String specialChars = "/\\<>:\"|?*";
-            if (!specialChars.contains(Character.toString(newDir.charAt(0)))) {
-                File dir = new File(currentDir + "/" + newDir);
-                if (dir.isDirectory())
-                    currentDir = currentDir + "/" + newDir;
-            }
+            newDir.replace("[/\\<>:\"|?*]", "%20");
+            File dir = new File(currentDir + "/" + newDir);
+            if (dir.isDirectory())
+                currentDir = currentDir + "/" + newDir;
         }
     }
 
@@ -232,7 +241,6 @@ public class Client {
                         System.out.print(GREEN + "] " + progress + "%\r" + RESET);
                         lastProgress = progress;
                     }
-
                 }
                 System.out.flush();
                 System.out.println(GREEN + "\n" + fileName[fileName.length - 1] + " Downloaded!" + RESET);
@@ -281,8 +289,10 @@ public class Client {
                 System.out.flush();
                 System.out.println(GREEN + "\n" + file + " Uploaded!" + RESET);
                 send.close();
-            } else
-                out.writeUTF("put: file does not exist");
+            } else {
+                out.writeUTF("cancel");
+                System.out.println("put: file does not exist");
+            }
         } catch (EOFException e) {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
