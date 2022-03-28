@@ -97,6 +97,14 @@ public class Client {
                             case "put":
                                 putFile(command[1]);
                                 break;
+
+                            case "server -primary":
+                                changeServer(sc, "primary");
+                                break;
+
+                            case "server -secondary":
+                                changeServer(sc, "secondary");
+                                break;
                         }
 
                     }
@@ -314,6 +322,22 @@ public class Client {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
             System.out.println("IO:" + e);
+        }
+    }
+
+    private static void changeServer(Scanner sc, String s) {
+        System.out.print("Enter " + s + " server address: ");
+        String newAddress = sc.nextLine();
+        System.out.print("Enter " + s + " server port: ");
+        String newPort = sc.nextLine();
+        try (OutputStream o = new FileOutputStream(config)) {
+            server.setProperty(s + ".address", newAddress);
+            server.setProperty(s + ".port", newPort);
+            server.store(o, null);
+            o.close();
+            System.out.println("server: " + s + " server updated successfully");
+        } catch (IOException ex) {
+            ex.printStackTrace();
         }
     }
 }
