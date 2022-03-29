@@ -91,7 +91,7 @@ public class Client {
                                 break;
 
                             case "get":
-                                getFile(sc, command[1]);
+                                getFile(command[1]);
                                 break;
 
                             case "put":
@@ -223,46 +223,53 @@ public class Client {
         }
     }
 
-    private static void getFile(Scanner sc, String file) {
+    private static void getFile(String file) {
         try {
             out.writeUTF(file);
             String answer = in.readUTF();
             if (answer.equals("true")) {
                 Long fileSize = Long.parseLong(in.readUTF());
-                String[] fileName = file.split("/");
-                byte[] b = new byte[1024];
-                FileOutputStream newFile = new FileOutputStream(currentDir + "/" + fileName[fileName.length - 1]);
-                BufferedOutputStream bos = new BufferedOutputStream(newFile);
-                int read = 0;
-                long bytesRead = 0;
-                int lastProgress = 0;
-                if (fileSize == 0) {
-                    System.out.print(GREEN +
-                            "Downloading " + fileName[fileName.length - 1] + " [" + RESET);
-                    for (int i = 0; i < 50; i++)
-                        System.out.print(GREEN + "#" + RESET);
-                    System.out.print(GREEN + "] " + "100%" + RESET);
-                } else {
-                    while (bytesRead != fileSize) {
-                        read = inData.read(b);
-                        bytesRead += read;
-                        bos.write(b, 0, read);
-                        int progress = (int) ((bytesRead * 100) / fileSize);
-                        System.out.println(progress);
-                        if (lastProgress != progress) {
-                            System.out.print(GREEN +
-                                    "Downloading " + fileName[fileName.length - 1] + " [" + RESET);
-                            for (int i = 0; i < (int) (progress / 2); i++)
-                                System.out.print(GREEN + "#" + RESET);
-                            System.out.print(GREEN + "] " + progress + "%\r" + RESET);
-                            lastProgress = progress;
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            String[] fileName = file.split("/");
+                            byte[] b = new byte[1024];
+                            FileOutputStream newFile = new FileOutputStream(
+                                    currentDir + "/" + fileName[fileName.length - 1]);
+                            BufferedOutputStream bos = new BufferedOutputStream(newFile);
+                            int read = 0;
+                            long bytesRead = 0;
+                            // int lastProgress = 0;
+                            while (bytesRead != fileSize) {
+                                read = inData.read(b);
+                                bytesRead += read;
+                                bos.write(b, 0, read);
+
+                                /*
+                                 * Progress bar without threading
+                                 * int progress = (int) ((bytesRead * 100) / fileSize);
+                                 * if (lastProgress != progress) {
+                                 * System.out.print(GREEN +
+                                 * "Downloading " + fileName[fileName.length - 1] + " [" + RESET);
+                                 * for (int i = 0; i < (int) (progress / 2); i++)
+                                 * System.out.print(GREEN + "#" + RESET);
+                                 * System.out.print(GREEN + "] " + progress + "%\r" + RESET);
+                                 * lastProgress = progress;
+                                 * }
+                                 */
+                            }
+                            System.out.flush();
+                            System.out.println(GREEN + "\n\n" + fileName[fileName.length - 1] + " Downloaded!" + RESET);
+                            bos.flush();
+                            newFile.close();
+                            String dir = in.readUTF();
+                            System.out.print(dir + "> ");
+                        } catch (IOException e) {
+                            System.out.println("IO:" + e.getMessage());
                         }
                     }
-                }
-                System.out.flush();
-                System.out.println(GREEN + "\n" + fileName[fileName.length - 1] + " Downloaded!" + RESET);
-                bos.flush();
-                newFile.close();
+                }).start();
             } else
                 System.out.println(answer);
         } catch (IOException e) {
@@ -275,51 +282,58 @@ public class Client {
             out.writeUTF(file);
             File f = new File(currentDir + "/" + file);
             if (Files.isReadable(f.toPath())) {
-                long fileLength = f.length();
-                out.writeUTF(Long.toString(fileLength));
-                FileInputStream send = new FileInputStream(currentDir + "/" + file);
-                BufferedInputStream bis = new BufferedInputStream(send);
-                byte[] b;
-                int byteSize = 1024;
-                long sent = 0;
-                int lastProgress = 0;
-                if (fileLength == 0) {
-                    System.out.print(GREEN +
-                            "Uploading " + file + " [" + RESET);
-                    for (int i = 1; i < 50; i++)
-                        System.out.print(GREEN + "#" + RESET);
-                    System.out.print(GREEN + "] " + "100%\r" + RESET);
-                } else {
-                    while (sent < fileLength) {
-                        if (fileLength - sent >= byteSize)
-                            sent += byteSize;
-                        else {
-                            byteSize = (int) (fileLength - sent);
-                            sent = fileLength;
-                        }
-                        b = new byte[byteSize];
-                        bis.read(b, 0, b.length);
-                        outData.write(b, 0, b.length);
-                        int progress = (int) ((sent * 100) / fileLength);
-                        if (lastProgress != progress) {
-                            System.out.print(GREEN +
-                                    "Uploading " + file + " [" + RESET);
-                            for (int i = 1; i < (int) (progress / 2); i++)
-                                System.out.print(GREEN + "#" + RESET);
-                            System.out.print(GREEN + "] " + progress + "%\r" + RESET);
-                            lastProgress = progress;
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            long fileLength = f.length();
+                            out.writeUTF(Long.toString(fileLength));
+                            FileInputStream send = new FileInputStream(currentDir + "/" + file);
+                            BufferedInputStream bis = new BufferedInputStream(send);
+                            byte[] b;
+                            int byteSize = 1024;
+                            long sent = 0;
+                            // int lastProgress = 0;
+                            while (sent < fileLength) {
+                                if (fileLength - sent >= byteSize)
+                                    sent += byteSize;
+                                else {
+                                    byteSize = (int) (fileLength - sent);
+                                    sent = fileLength;
+                                }
+                                b = new byte[byteSize];
+                                bis.read(b, 0, b.length);
+                                outData.write(b, 0, b.length);
+
+                                /*
+                                 * Progress bar without threading
+                                 * int progress = (int) ((sent * 100) / fileLength);
+                                 * if (lastProgress != progress) {
+                                 * System.out.print(GREEN +
+                                 * "Uploading " + file + " [" + RESET);
+                                 * for (int i = 1; i < (int) (progress / 2); i++)
+                                 * System.out.print(GREEN + "#" + RESET);
+                                 * System.out.print(GREEN + "] " + progress + "%\r" + RESET);
+                                 * lastProgress = progress;
+                                 * }
+                                 */
+                            }
+                            // System.out.flush();
+                            System.out.println(GREEN + "\n\n" + file + " Uploaded!" + RESET);
+                            send.close();
+                            String dir = in.readUTF();
+                            System.out.print(dir + "> ");
+                        } catch (EOFException e) {
+                            System.out.println("EOF:" + e);
+                        } catch (IOException e) {
+                            System.out.println("IO:" + e);
                         }
                     }
-                }
-                System.out.flush();
-                System.out.println(GREEN + "\n" + file + " Uploaded!" + RESET);
-                send.close();
+                }).start();
             } else {
                 out.writeUTF("cancel");
                 System.out.println("put: file does not exist");
             }
-        } catch (EOFException e) {
-            System.out.println("EOF:" + e);
         } catch (IOException e) {
             System.out.println("IO:" + e);
         }

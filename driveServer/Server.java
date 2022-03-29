@@ -224,24 +224,36 @@ class Connection extends Thread {
                 out.writeUTF("true");
                 long fileLength = f.length();
                 out.writeUTF(Long.toString(fileLength));
-                FileInputStream send = new FileInputStream(
-                        root + "/" + username + "/" + currentDir + "/" + file);
-                BufferedInputStream bis = new BufferedInputStream(send);
-                byte[] b;
-                int byteSize = 1024;
-                long sent = 0;
-                while (sent < fileLength) {
-                    if (fileLength - sent >= byteSize)
-                        sent += byteSize;
-                    else {
-                        byteSize = (int) (fileLength - sent);
-                        sent = fileLength;
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            FileInputStream send = new FileInputStream(
+                                    root + "/" + username + "/" + currentDir + "/" + file);
+                            BufferedInputStream bis = new BufferedInputStream(send);
+                            byte[] b;
+                            int byteSize = 1024;
+                            long sent = 0;
+                            while (sent < fileLength) {
+                                if (fileLength - sent >= byteSize)
+                                    sent += byteSize;
+                                else {
+                                    byteSize = (int) (fileLength - sent);
+                                    sent = fileLength;
+                                }
+                                b = new byte[byteSize];
+                                bis.read(b, 0, b.length);
+                                outData.write(b, 0, b.length);
+                            }
+                            send.close();
+                            out.writeUTF(currentDir);
+                        } catch (EOFException e) {
+                            System.out.println("EOF:" + e);
+                        } catch (IOException e) {
+                            System.out.println("IO:" + e);
+                        }
                     }
-                    b = new byte[byteSize];
-                    bis.read(b, 0, b.length);
-                    outData.write(b, 0, b.length);
-                }
-                send.close();
+                }).start();
             } else
                 out.writeUTF("get: file does not exist");
         } catch (EOFException e) {
@@ -256,22 +268,32 @@ class Connection extends Thread {
             String file = in.readUTF();
             String answer = in.readUTF();
             if (!answer.equals("cancel")) {
-                Long fileSize = Long.parseLong(answer);
-                String[] fileName = file.split("/");
-                byte[] b = new byte[1024];
-                FileOutputStream newFile = new FileOutputStream(
-                        root + "/" + username + "/" + currentDir + "/"
-                                + fileName[fileName.length - 1]);
-                BufferedOutputStream bos = new BufferedOutputStream(newFile);
-                int read = 0;
-                long bytesRead = 0;
-                while (bytesRead != fileSize) {
-                    read = inData.read(b);
-                    bytesRead += read;
-                    bos.write(b, 0, read);
-                }
-                bos.flush();
-                newFile.close();
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            Long fileSize = Long.parseLong(answer);
+                            String[] fileName = file.split("/");
+                            byte[] b = new byte[1024];
+                            FileOutputStream newFile = new FileOutputStream(
+                                    root + "/" + username + "/" + currentDir + "/"
+                                            + fileName[fileName.length - 1]);
+                            BufferedOutputStream bos = new BufferedOutputStream(newFile);
+                            int read = 0;
+                            long bytesRead = 0;
+                            while (bytesRead != fileSize) {
+                                read = inData.read(b);
+                                bytesRead += read;
+                                bos.write(b, 0, read);
+                            }
+                            bos.flush();
+                            newFile.close();
+                            out.writeUTF(currentDir);
+                        } catch (IOException e) {
+                            System.out.println("IO:" + e.getMessage());
+                        }
+                    }
+                }).start();
             }
         } catch (IOException e) {
             System.out.println("IO:" + e.getMessage());
