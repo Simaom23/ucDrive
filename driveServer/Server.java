@@ -19,42 +19,71 @@ public class Server {
         try (InputStream in = new FileInputStream(confFile)) {
             Server.conf.load(in);
             in.close();
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-        try {
             serverAddress = InetAddress.getByName(conf.getProperty("primary.address"));
             serverPort = Integer.parseInt(conf.getProperty("primary.port"));
             dataPort = Integer.parseInt(conf.getProperty("primary.port")) + 1;
+        } catch (IOException ex) {
+            ex.printStackTrace();
         } catch (NumberFormatException e) {
             System.out.println("Listen:" + e.getMessage());
-        } catch (UnknownHostException e) {
-            System.out.println("Listen:" + e.getMessage());
         }
-        int num = 0;
-        try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-            try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
-                System.out.println("Listening On -> " + listenSocket);
-                System.out.println("### - ucDrive Server Info - ###");
-                try (InputStream in = new FileInputStream(usersFile)) {
-                    Server.users.load(in);
-                    in.close();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
 
-                while (true) {
-                    Socket clientCommandSocket = listenSocket.accept();
-                    Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
-                    num++;
-                    System.out.println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket
-                            + "\n-> Data Socket: " + clientDataSocket);
-                    new Connection(clientCommandSocket, clientDataSocket, num);
+        int num = 0;
+        try (DatagramSocket aSocket = new DatagramSocket(6790)) {
+            try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
+                try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
+                    System.out.println("Listening On -> " + listenSocket);
+                    System.out.println("### - ucDrive Server Info - ###");
+                    try (InputStream in = new FileInputStream(usersFile)) {
+                        Server.users.load(in);
+                        in.close();
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
+
+                    serverOnline(aSocket);
+                    while (true) {
+                        Socket clientCommandSocket = listenSocket.accept();
+                        Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
+                        num++;
+                        System.out
+                                .println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket
+                                        + "\n-> Data Socket: " + clientDataSocket);
+                        new Connection(clientCommandSocket, clientDataSocket, num);
+                    }
+                } catch (IOException e) {
+                    System.out.println("Listen:" + e.getMessage());
                 }
+            } catch (IOException e) {
+                System.out.println("Listen:" + e.getMessage());
             }
         } catch (IOException e) {
             System.out.println("Listen:" + e.getMessage());
         }
+    }
+
+    private static void serverOnline(DatagramSocket aSocket) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    while (true) {
+
+                        byte[] buffer = new byte[1024];
+                        DatagramPacket reply = new DatagramPacket(buffer, buffer.length);
+                        aSocket.receive(reply);
+                        String str = "PONG";
+                        buffer = str.getBytes();
+                        InetAddress host = reply.getAddress();
+                        int port = reply.getPort();
+                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, host, port);
+                        aSocket.send(request);
+                    }
+                } catch (IOException e) {
+                    System.out.println("IO:" + e);
+                }
+            }
+        }).start();
     }
 }
 

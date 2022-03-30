@@ -10,6 +10,8 @@ public class Server {
     private static InetAddress serverAddress;
     private static int serverPort;
     private static int dataPort;
+    private static InetAddress primaryAddress;
+    private static int primaryPort = 6790;
     public static String usersFile = "backupServer/users.properties";
     public static String confFile = "backupServer/conf.properties";
     public static Properties users = new Properties();
@@ -22,6 +24,8 @@ public class Server {
             serverAddress = InetAddress.getByName(conf.getProperty("secondary.address"));
             serverPort = Integer.parseInt(conf.getProperty("secondary.port"));
             dataPort = Integer.parseInt(conf.getProperty("secondary.port")) + 1;
+            primaryAddress = InetAddress.getByName(conf.getProperty("primary.address"));
+            primaryPort = Integer.parseInt(conf.getProperty("primary.port"));
         } catch (IOException ex) {
             ex.printStackTrace();
         } catch (NumberFormatException e) {
@@ -29,40 +33,62 @@ public class Server {
         }
 
         int num = 0;
+        try (DatagramSocket aSocket = new DatagramSocket()) {
+            int notReachable = 0;
+            while (notReachable < 5) {
+                String str = "PING";
+                byte[] buf = new byte[1024];
+                buf = str.getBytes();
+
+                // Create a datagram packet to send as an UDP packet
+                DatagramPacket ping = new DatagramPacket(buf, buf.length, primaryAddress, primaryPort);
+                // Send the Ping datagram to the specified server
+                aSocket.send(ping);
+
+                // Try to receive the packet - but it can fail (timeout)
+                try {
+                    // Set up the timeout 1000 ms = 1 sec
+                    aSocket.setSoTimeout(1000);
+
+                    // Set up an UPD packet for recieving
+                    DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+
+                    // Try to receive the response from the ping
+                    aSocket.receive(response);
+                } catch (IOException e) {
+                    // Print which packet has timed out
+                    notReachable++;
+                    System.out.println("Timeout " + notReachable);
+                    continue;
+                }
+                notReachable = 0;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
             try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
-                System.out.println("Backup Server Listening On -> " + listenSocket);
-                System.out.println("### - ucDrive Server Info - ###");
                 try (InputStream in = new FileInputStream(usersFile)) {
                     Server.users.load(in);
                     in.close();
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
-                try {
-                    int fails = 0;
-                    while (fails < 5) {
-                        InetAddress address = InetAddress.getByName("192.168.1.103");
-                        boolean reachable = address.isReachable(10000);
-                        if (!reachable)
-                            fails++;
-                        else
-                            fails = 0;
+                System.out.println("Backup Server Listening On -> " + listenSocket);
+                System.out.println("### - ucDrive Server Info - ###");
 
-                        System.out.println("Is host reachable? " + reachable);
-                    }
-
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
                 while (true) {
                     Socket clientCommandSocket = listenSocket.accept();
                     Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
                     num++;
-                    System.out.println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket
-                            + "\n-> Data Socket: " + clientDataSocket);
+                    System.out
+                            .println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket
+                                    + "\n-> Data Socket: " + clientDataSocket);
                     new Connection(clientCommandSocket, clientDataSocket, num);
                 }
+            } catch (IOException e) {
+                System.out.println("Listen:" + e.getMessage());
             }
         } catch (IOException e) {
             System.out.println("Listen:" + e.getMessage());
