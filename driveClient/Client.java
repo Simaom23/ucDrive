@@ -1,23 +1,23 @@
 package driveClient;
 
 import java.net.*;
+import java.io.*;
 import java.nio.file.Files;
 import java.util.Properties;
 import java.util.Scanner;
-import java.io.*;
 
 public class Client {
+    private static final String GREEN = "\u001B[32m";
+    private static final String RESET = "\u001B[0m";
     private static String config = "driveClient/settings.properties";
+    private static String currentDir = System.getProperty("user.dir").replace("\\", "/");
     private static Properties server = new Properties();
-    private static String serverhostname;
-    private static int serversocket;
-    public static final String GREEN = "\u001B[32m";
-    public static final String RESET = "\u001B[0m";
-    public static DataInputStream in;
-    public static DataOutputStream out;
-    public static InputStream inData;
-    public static OutputStream outData;
-    public static String currentDir = System.getProperty("user.dir").replace("\\", "/");
+    private static String serverAddress;
+    private static int serverPort;
+    private static DataInputStream in;
+    private static DataOutputStream out;
+    private static InputStream inData;
+    private static OutputStream outData;
 
     public static void main(String args[]) {
         try (InputStream conf = new FileInputStream(config)) {
@@ -27,12 +27,12 @@ public class Client {
             ex.printStackTrace();
         }
 
-        serverhostname = server.getProperty("primary.server");
-        serversocket = Integer.parseInt(server.getProperty("primary.port"));
+        serverAddress = server.getProperty("primary.server");
+        serverPort = Integer.parseInt(server.getProperty("primary.port"));
 
         // Socket creation
-        try (Socket c = new Socket(serverhostname, serversocket)) {
-            try (Socket d = new Socket(serverhostname, serversocket + 500)) {
+        try (Socket c = new Socket(serverAddress, serverPort)) {
+            try (Socket d = new Socket(serverAddress, serverPort + 1)) {
                 System.out.println("Welcome to ucDrive 1.0");
 
                 // Input and output stream
@@ -259,7 +259,6 @@ public class Client {
                                  * }
                                  */
                             }
-                            System.out.flush();
                             System.out.println(GREEN + "\n\n" + fileName[fileName.length - 1] + " Downloaded!" + RESET);
                             bos.flush();
                             newFile.close();
@@ -318,7 +317,6 @@ public class Client {
                                  * }
                                  */
                             }
-                            // System.out.flush();
                             System.out.println(GREEN + "\n\n" + file + " Uploaded!" + RESET);
                             send.close();
                             String dir = in.readUTF();

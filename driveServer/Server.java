@@ -1,21 +1,39 @@
 package driveServer;
 
 import java.net.*;
-import java.nio.file.Files;
 import java.io.*;
+import java.nio.file.Files;
 import java.util.Properties;
 
 // Primary server
 public class Server {
-    private static int serverPort = 6000;
-    private static int dataPort = 6500;
+    private static InetAddress serverAddress;
+    private static int serverPort;
+    private static int dataPort;
     public static String usersFile = "driveServer/users.properties";
+    public static String confFile = "driveServer/conf.properties";
     public static Properties users = new Properties();
+    public static Properties conf = new Properties();
 
     public static void main(String args[]) {
+        try (InputStream in = new FileInputStream(confFile)) {
+            Server.conf.load(in);
+            in.close();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+        try {
+            serverAddress = InetAddress.getByName(conf.getProperty("primary.address"));
+            serverPort = Integer.parseInt(conf.getProperty("primary.port"));
+            dataPort = Integer.parseInt(conf.getProperty("primary.port")) + 1;
+        } catch (NumberFormatException e) {
+            System.out.println("Listen:" + e.getMessage());
+        } catch (UnknownHostException e) {
+            System.out.println("Listen:" + e.getMessage());
+        }
         int num = 0;
-        try (ServerSocket listenSocket = new ServerSocket(serverPort)) {
-            try (ServerSocket dataSocket = new ServerSocket(dataPort)) {
+        try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
+            try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
                 System.out.println("Listening On -> " + listenSocket);
                 System.out.println("### - ucDrive Server Info - ###");
                 try (InputStream in = new FileInputStream(usersFile)) {

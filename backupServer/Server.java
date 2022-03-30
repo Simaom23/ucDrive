@@ -1,22 +1,37 @@
-package secondaryServer;
+package backupServer;
 
 import java.net.*;
-import java.nio.file.Files;
 import java.io.*;
+import java.nio.file.Files;
 import java.util.Properties;
 
 // Primary server
 public class Server {
-    private static int serverPort = 6000;
-    private static int dataPort = 6500;
-    public static String usersFile = "driveServer/users.properties";
+    private static InetAddress serverAddress;
+    private static int serverPort;
+    private static int dataPort;
+    public static String usersFile = "backupServer/users.properties";
+    public static String confFile = "backupServer/conf.properties";
     public static Properties users = new Properties();
+    public static Properties conf = new Properties();
 
     public static void main(String args[]) {
+        try (InputStream in = new FileInputStream(confFile)) {
+            Server.conf.load(in);
+            in.close();
+            serverAddress = InetAddress.getByName(conf.getProperty("secondary.address"));
+            serverPort = Integer.parseInt(conf.getProperty("secondary.port"));
+            dataPort = Integer.parseInt(conf.getProperty("secondary.port")) + 1;
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        } catch (NumberFormatException e) {
+            System.out.println("Listen:" + e.getMessage());
+        }
+
         int num = 0;
-        try (ServerSocket listenSocket = new ServerSocket(serverPort)) {
-            try (ServerSocket dataSocket = new ServerSocket(dataPort)) {
-                System.out.println("Listening On -> " + listenSocket);
+        try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
+            try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
+                System.out.println("Backup Server Listening On -> " + listenSocket);
                 System.out.println("### - ucDrive Server Info - ###");
                 try (InputStream in = new FileInputStream(usersFile)) {
                     Server.users.load(in);
@@ -24,7 +39,22 @@ public class Server {
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
+                try {
+                    int fails = 0;
+                    while (fails < 5) {
+                        InetAddress address = InetAddress.getByName("192.168.1.103");
+                        boolean reachable = address.isReachable(10000);
+                        if (!reachable)
+                            fails++;
+                        else
+                            fails = 0;
 
+                        System.out.println("Is host reachable? " + reachable);
+                    }
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
                 while (true) {
                     Socket clientCommandSocket = listenSocket.accept();
                     Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
@@ -224,24 +254,36 @@ class Connection extends Thread {
                 out.writeUTF("true");
                 long fileLength = f.length();
                 out.writeUTF(Long.toString(fileLength));
-                FileInputStream send = new FileInputStream(
-                        root + "/" + username + "/" + currentDir + "/" + file);
-                BufferedInputStream bis = new BufferedInputStream(send);
-                byte[] b;
-                int byteSize = 1024;
-                long sent = 0;
-                while (sent < fileLength) {
-                    if (fileLength - sent >= byteSize)
-                        sent += byteSize;
-                    else {
-                        byteSize = (int) (fileLength - sent);
-                        sent = fileLength;
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            FileInputStream send = new FileInputStream(
+                                    root + "/" + username + "/" + currentDir + "/" + file);
+                            BufferedInputStream bis = new BufferedInputStream(send);
+                            byte[] b;
+                            int byteSize = 1024;
+                            long sent = 0;
+                            while (sent < fileLength) {
+                                if (fileLength - sent >= byteSize)
+                                    sent += byteSize;
+                                else {
+                                    byteSize = (int) (fileLength - sent);
+                                    sent = fileLength;
+                                }
+                                b = new byte[byteSize];
+                                bis.read(b, 0, b.length);
+                                outData.write(b, 0, b.length);
+                            }
+                            send.close();
+                            out.writeUTF(currentDir);
+                        } catch (EOFException e) {
+                            System.out.println("EOF:" + e);
+                        } catch (IOException e) {
+                            System.out.println("IO:" + e);
+                        }
                     }
-                    b = new byte[byteSize];
-                    bis.read(b, 0, b.length);
-                    outData.write(b, 0, b.length);
-                }
-                send.close();
+                }).start();
             } else
                 out.writeUTF("get: file does not exist");
         } catch (EOFException e) {
@@ -256,22 +298,32 @@ class Connection extends Thread {
             String file = in.readUTF();
             String answer = in.readUTF();
             if (!answer.equals("cancel")) {
-                Long fileSize = Long.parseLong(answer);
-                String[] fileName = file.split("/");
-                byte[] b = new byte[1024];
-                FileOutputStream newFile = new FileOutputStream(
-                        root + "/" + username + "/" + currentDir + "/"
-                                + fileName[fileName.length - 1]);
-                BufferedOutputStream bos = new BufferedOutputStream(newFile);
-                int read = 0;
-                long bytesRead = 0;
-                while (bytesRead != fileSize) {
-                    read = inData.read(b);
-                    bytesRead += read;
-                    bos.write(b, 0, read);
-                }
-                bos.flush();
-                newFile.close();
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            Long fileSize = Long.parseLong(answer);
+                            String[] fileName = file.split("/");
+                            byte[] b = new byte[1024];
+                            FileOutputStream newFile = new FileOutputStream(
+                                    root + "/" + username + "/" + currentDir + "/"
+                                            + fileName[fileName.length - 1]);
+                            BufferedOutputStream bos = new BufferedOutputStream(newFile);
+                            int read = 0;
+                            long bytesRead = 0;
+                            while (bytesRead != fileSize) {
+                                read = inData.read(b);
+                                bytesRead += read;
+                                bos.write(b, 0, read);
+                            }
+                            bos.flush();
+                            newFile.close();
+                            out.writeUTF(currentDir);
+                        } catch (IOException e) {
+                            System.out.println("IO:" + e.getMessage());
+                        }
+                    }
+                }).start();
             }
         } catch (IOException e) {
             System.out.println("IO:" + e.getMessage());
