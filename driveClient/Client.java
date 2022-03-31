@@ -73,44 +73,37 @@ public class Client {
                             command[1].replace("[/\\<>:\"|?*]", "%20");
                         }
 
+                        out.writeUTF(command[0]);
                         switch (command[0]) {
                             case "passwd":
-                                out.writeUTF(command[0]);
                                 changePasswd(sc);
                                 break;
 
                             case "ls":
-                                out.writeUTF(command[0]);
                                 listDriveFiles(sc);
                                 break;
 
                             case "cd":
-                                out.writeUTF(command[0]);
                                 out.writeUTF(command[1]);
                                 break;
 
                             case "cd -p":
-                                out.writeUTF(command[0]);
                                 changeUserDir(sc, command[1]);
                                 break;
 
                             case "ls -p":
-                                out.writeUTF(command[0]);
                                 listUserFiles(sc);
                                 break;
 
                             case "get":
-                                out.writeUTF(command[0]);
                                 getFile(command[1]);
                                 break;
 
                             case "put":
-                                out.writeUTF(command[0]);
                                 putFile(command[1]);
                                 break;
 
                             case "server -primary":
-                                out.writeUTF(command[0]);
                                 changeServer(sc, "primary");
                                 break;
 
@@ -120,7 +113,7 @@ public class Client {
                                 break;
 
                             case "exit":
-                                out.writeUTF(command[0]);
+
                                 exit = true;
                                 break;
                         }
