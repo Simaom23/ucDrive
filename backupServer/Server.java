@@ -11,11 +11,13 @@ public class Server {
     private static int serverPort;
     private static int dataPort;
     private static InetAddress primaryAddress;
-    private static int primaryPort = 6790;
+    private static int primaryPort;
+    private static int secondaryUdp;
     public static String usersFile = "backupServer/users.properties";
     public static String confFile = "backupServer/conf.properties";
     public static Properties users = new Properties();
     public static Properties conf = new Properties();
+    public static boolean primaryAlive = true;
 
     public static void main(String args[]) {
         try (InputStream in = new FileInputStream(confFile)) {
@@ -24,8 +26,9 @@ public class Server {
             serverAddress = InetAddress.getByName(conf.getProperty("secondary.address"));
             serverPort = Integer.parseInt(conf.getProperty("secondary.port"));
             dataPort = Integer.parseInt(conf.getProperty("secondary.port")) + 1;
+            secondaryUdp = Integer.parseInt(conf.getProperty("secondary.udp"));
             primaryAddress = InetAddress.getByName(conf.getProperty("primary.address"));
-            primaryPort = Integer.parseInt(conf.getProperty("primary.port"));
+            primaryPort = Integer.parseInt(conf.getProperty("primary.udp"));
         } catch (IOException ex) {
             ex.printStackTrace();
         } catch (NumberFormatException e) {
@@ -33,7 +36,46 @@ public class Server {
         }
 
         int num = 0;
-        try (DatagramSocket aSocket = new DatagramSocket()) {
+        while (true) {
+            try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
+                try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
+                    checkPrimary();
+                    continuousCheck(listenSocket, dataSocket);
+
+                    try (InputStream in = new FileInputStream(usersFile)) {
+                        Server.users.load(in);
+                        in.close();
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
+                    System.out.println("Backup Server Listening On -> " + listenSocket);
+                    System.out.println("### - ucDrive Server Info - ###");
+
+                    while (!primaryAlive) {
+                        try {
+                            Socket clientCommandSocket = listenSocket.accept();
+                            Socket clientDataSocket = dataSocket.accept();
+                            num++;
+                            System.out
+                                    .println("[" + num + "] " + "New Connection:\n-> Command Socket: "
+                                            + clientCommandSocket
+                                            + "\n-> Data Socket: " + clientDataSocket);
+                            new Connection(clientCommandSocket, clientDataSocket, num);
+                        } catch (SocketException e) {
+                            continue;
+                        }
+                    }
+                } catch (IOException e) {
+                    System.out.println("Listen:" + e.getMessage());
+                }
+            } catch (IOException e) {
+                System.out.println("Listen:" + e.getMessage());
+            }
+        }
+    }
+
+    private static void checkPrimary() {
+        try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp)) {
             int notReachable = 0;
             while (notReachable < 5) {
                 String str = "PING";
@@ -63,36 +105,44 @@ public class Server {
                 }
                 notReachable = 0;
             }
+            primaryAlive = false;
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
 
-        try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-            try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
-                try (InputStream in = new FileInputStream(usersFile)) {
-                    Server.users.load(in);
-                    in.close();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
+    private static void continuousCheck(ServerSocket listenSocket, ServerSocket dataSocket) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp)) {
+                    int reachable = 0;
+                    while (reachable < 5) {
+                        byte[] buffer = new byte[1024];
+                        DatagramPacket reply;
+                        try {
+                            aSocket.setSoTimeout(1000);
+                            reply = new DatagramPacket(buffer, buffer.length);
+                            aSocket.receive(reply);
+                        } catch (IOException e) {
+                            reachable = 0;
+                            continue;
+                        }
+                        String str = "PONG";
+                        buffer = str.getBytes();
+                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, primaryAddress, primaryPort);
+                        aSocket.send(request);
+                        reachable++;
+                        System.out.println("Primary Alive " + reachable);
+                    }
+                    primaryAlive = true;
+                    listenSocket.close();
+                    dataSocket.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-                System.out.println("Backup Server Listening On -> " + listenSocket);
-                System.out.println("### - ucDrive Server Info - ###");
-
-                while (true) {
-                    Socket clientCommandSocket = listenSocket.accept();
-                    Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
-                    num++;
-                    System.out
-                            .println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket
-                                    + "\n-> Data Socket: " + clientDataSocket);
-                    new Connection(clientCommandSocket, clientDataSocket, num);
-                }
-            } catch (IOException e) {
-                System.out.println("Listen:" + e.getMessage());
             }
-        } catch (IOException e) {
-            System.out.println("Listen:" + e.getMessage());
-        }
+        }).start();
     }
 }
 

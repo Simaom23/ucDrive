@@ -10,6 +10,9 @@ public class Server {
     private static InetAddress serverAddress;
     private static int serverPort;
     private static int dataPort;
+    private static int udpPort;
+    private static InetAddress secondaryAddress;
+    private static int secondaryPort;
     public static String usersFile = "driveServer/users.properties";
     public static String confFile = "driveServer/conf.properties";
     public static Properties users = new Properties();
@@ -22,6 +25,9 @@ public class Server {
             serverAddress = InetAddress.getByName(conf.getProperty("primary.address"));
             serverPort = Integer.parseInt(conf.getProperty("primary.port"));
             dataPort = Integer.parseInt(conf.getProperty("primary.port")) + 1;
+            udpPort = Integer.parseInt(conf.getProperty("primary.udp"));
+            secondaryAddress = InetAddress.getByName(conf.getProperty("secondary.address"));
+            secondaryPort = Integer.parseInt(conf.getProperty("secondary.udp"));
         } catch (IOException ex) {
             ex.printStackTrace();
         } catch (NumberFormatException e) {
@@ -29,7 +35,10 @@ public class Server {
         }
 
         int num = 0;
-        try (DatagramSocket aSocket = new DatagramSocket(6790)) {
+
+        while (true) {
+            secondaryOnline();
+            serverOnline();
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
                 try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
                     System.out.println("Listening On -> " + listenSocket);
@@ -40,8 +49,6 @@ public class Server {
                     } catch (IOException ex) {
                         ex.printStackTrace();
                     }
-
-                    serverOnline(aSocket);
                     while (true) {
                         Socket clientCommandSocket = listenSocket.accept();
                         Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
@@ -57,26 +64,49 @@ public class Server {
             } catch (IOException e) {
                 System.out.println("Listen:" + e.getMessage());
             }
-        } catch (IOException e) {
-            System.out.println("Listen:" + e.getMessage());
         }
     }
 
-    private static void serverOnline(DatagramSocket aSocket) {
+    private static void secondaryOnline() {
+        try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
+            int reachable = 0;
+            int notReachable = 0;
+            while (reachable < 5 && notReachable < 5) {
+                String str = "PING";
+                byte[] buf = new byte[1024];
+                buf = str.getBytes();
+                DatagramPacket ping = new DatagramPacket(buf, buf.length, secondaryAddress, secondaryPort);
+                aSocket.send(ping);
+                try {
+                    aSocket.setSoTimeout(1000);
+                    DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+                    aSocket.receive(response);
+                } catch (IOException e) {
+                    reachable = 0;
+                    notReachable++;
+                    continue;
+                }
+                notReachable = 0;
+                reachable++;
+            }
+        } catch (IOException e) {
+            System.out.println("IO:" + e);
+        }
+    }
+
+    private static void serverOnline() {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                try {
+                try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
                     while (true) {
-
                         byte[] buffer = new byte[1024];
                         DatagramPacket reply = new DatagramPacket(buffer, buffer.length);
                         aSocket.receive(reply);
                         String str = "PONG";
                         buffer = str.getBytes();
                         InetAddress host = reply.getAddress();
-                        int port = reply.getPort();
-                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, host, port);
+                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, host, secondaryPort);
                         aSocket.send(request);
                     }
                 } catch (IOException e) {
