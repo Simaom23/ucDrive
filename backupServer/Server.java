@@ -276,7 +276,6 @@ class Connection extends Thread {
                     ex.printStackTrace();
                 }
             }
-
             auth = true;
         } catch (EOFException e) {
             System.out.println("EOF:" + e);

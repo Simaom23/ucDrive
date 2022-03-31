@@ -40,7 +40,6 @@ public class Server {
             secondaryOnline();
             serverOnline();
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-
                 backupServerImage(usersFile + " " + confFile);
                 System.out.println("Listening On -> " + listenSocket);
                 System.out.println("### - ucDrive Server Info - ###");
