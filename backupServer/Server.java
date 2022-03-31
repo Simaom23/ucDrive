@@ -61,6 +61,7 @@ public class Server {
                                             + clientCommandSocket
                                             + "\n-> Data Socket: " + clientDataSocket);
                             new Connection(clientCommandSocket, clientDataSocket, num);
+
                         } catch (SocketException e) {
                             continue;
                         }
