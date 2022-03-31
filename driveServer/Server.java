@@ -37,8 +37,9 @@ public class Server {
         int num = 0;
 
         while (true) {
-            secondaryOnline();
+            checkSecondary();
             serverOnline();
+
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
                 backupServerImage(usersFile + " " + confFile);
                 System.out.println("Listening On -> " + listenSocket);
@@ -76,30 +77,39 @@ public class Server {
         }).start();
     }
 
-    private static void secondaryOnline() {
+    private static void checkSecondary() {
         try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
-            int reachable = 0;
             int notReachable = 0;
-            while (reachable < 5 && notReachable < 5) {
+            while (notReachable < 5) {
                 String str = "PING";
                 byte[] buf = new byte[1024];
                 buf = str.getBytes();
+
+                // Create a datagram packet to send as an UDP packet
                 DatagramPacket ping = new DatagramPacket(buf, buf.length, secondaryAddress, secondaryPort);
+                // Send the Ping datagram to the specified server
                 aSocket.send(ping);
+
+                // Try to receive the packet - but it can fail (timeout)
                 try {
+                    // Set up the timeout 1000 ms = 1 sec
                     aSocket.setSoTimeout(1000);
+
+                    // Set up an UPD packet for recieving
                     DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+
+                    // Try to receive the response from the ping
                     aSocket.receive(response);
                 } catch (IOException e) {
-                    reachable = 0;
+                    // Print which packet has timed out
                     notReachable++;
+                    System.out.println("Timeout " + notReachable);
                     continue;
                 }
                 notReachable = 0;
-                reachable++;
             }
-        } catch (IOException e) {
-            System.out.println("IO:" + e);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -301,9 +311,9 @@ class Connection extends Thread {
                         current += directory[i];
                 }
                 currentDir = current;
-            } else if (newDir.equals("/") || newDir.equals("home"))
+            } else if (newDir.equals("/") || newDir.equals("home") || newDir.equals("."))
                 currentDir = "home";
-            else if (!newDir.equals("home") && !newDir.equals(".")) {
+            else if (!newDir.equals("home") && !newDir.equals(".") && !newDir.equals("..")) {
                 newDir.replace("[/\\<>:\"|?*]", "%20");
                 File dir = new File(root + "/" + username + "/home/" + newDir);
                 if (dir.isDirectory())

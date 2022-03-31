@@ -17,7 +17,6 @@ public class Server {
     public static String confFile = "backupServer/conf.properties";
     public static Properties users = new Properties();
     public static Properties conf = new Properties();
-    public static boolean primaryAlive = true;
 
     public static void main(String args[]) {
         try (InputStream in = new FileInputStream(confFile)) {
@@ -39,7 +38,7 @@ public class Server {
         while (true) {
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
                 checkPrimary();
-                continuousCheck(listenSocket);
+                serverOnline();
 
                 try (InputStream in = new FileInputStream(usersFile)) {
                     Server.users.load(in);
@@ -50,7 +49,7 @@ public class Server {
                 System.out.println("Backup Server Listening On -> " + listenSocket);
                 System.out.println("### - ucDrive Server Info - ###");
 
-                while (!primaryAlive) {
+                while (true) {
                     try {
                         Socket clientCommandSocket = listenSocket.accept();
                         num++;
@@ -133,40 +132,28 @@ public class Server {
                 }
                 notReachable = 0;
             }
-            primaryAlive = false;
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private static void continuousCheck(ServerSocket listenSocket) {
+    private static void serverOnline() {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp)) {
-                    int reachable = 0;
-                    while (reachable < 5) {
+                    while (true) {
                         byte[] buffer = new byte[1024];
-                        DatagramPacket reply;
-                        try {
-                            aSocket.setSoTimeout(1000);
-                            reply = new DatagramPacket(buffer, buffer.length);
-                            aSocket.receive(reply);
-                        } catch (IOException e) {
-                            reachable = 0;
-                            continue;
-                        }
+                        DatagramPacket reply = new DatagramPacket(buffer, buffer.length);
+                        aSocket.receive(reply);
                         String str = "PONG";
                         buffer = str.getBytes();
-                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, primaryAddress, primaryPort);
+                        InetAddress host = reply.getAddress();
+                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, host, primaryPort);
                         aSocket.send(request);
-                        reachable++;
-                        System.out.println("Primary Alive " + reachable);
                     }
-                    primaryAlive = true;
-                    listenSocket.close();
-                } catch (Exception e) {
-                    e.printStackTrace();
+                } catch (IOException e) {
+                    System.out.println("IO:" + e);
                 }
             }
         }).start();

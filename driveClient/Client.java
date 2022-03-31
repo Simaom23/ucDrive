@@ -23,7 +23,7 @@ public class Client {
     private static boolean primary = true;
     private static boolean exit = false;
 
-    public static void main(String args[]) {
+    public static void main(String args[]) throws InterruptedException {
         try (InputStream conf = new FileInputStream(config)) {
             server.load(conf);
             conf.close();
@@ -128,16 +128,16 @@ public class Client {
                     System.out.println("EOF: " + e.getMessage());
                 } catch (IOException e) {
                     if (primary) {
-                        System.out.println("Switching to secondary server...");
                         primary = false;
                         serverAddress = secondaryAddress;
                         serverPort = secondaryPort;
                     } else {
-                        System.out.println("Switching to primary server...");
                         primary = true;
                         serverAddress = primaryAddress;
                         serverPort = primaryPort;
                     }
+                    System.out.println("Switching server...");
+                    Thread.sleep(250);
                 }
                 if (exit)
                     break;
