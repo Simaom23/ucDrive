@@ -123,22 +123,28 @@ public class Client {
                                     out.writeUTF(command[0]);
                                     changeServer(sc, "secondary");
                                     break;
+
+                                case "exit":
+                                    out.writeUTF(command[0]);
+                                    break;
                             }
 
                         }
                     }
 
                 } catch (UnknownHostException e) {
-                    System.out.println("Sock:" + e.getMessage());
+                    System.out.println("Sock: " + e.getMessage());
                 } catch (EOFException e) {
-                    System.out.println("EOF:" + e.getMessage());
+                    System.out.println("EOF: " + e.getMessage());
                 } catch (IOException e) {
-                    System.out.println("IO:" + e.getMessage());
+                    System.out.println("IO: " + e.getMessage());
                     if (primary) {
+                        System.out.println("Switching to secondary server!");
                         primary = false;
                         serverAddress = secondaryAddress;
                         serverPort = secondaryPort;
                     } else {
+                        System.out.println("Switching to primary server!");
                         primary = true;
                         serverAddress = primaryAddress;
                         serverPort = primaryPort;

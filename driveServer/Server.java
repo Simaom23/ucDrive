@@ -67,6 +67,19 @@ public class Server {
         }
     }
 
+    private static void backupServerImage() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
+                    return;
+                } catch (IOException e) {
+                    System.out.println("IO:" + e);
+                }
+            }
+        }).start();
+    }
+
     private static void secondaryOnline() {
         try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
             int reachable = 0;

@@ -75,6 +75,19 @@ public class Server {
         }
     }
 
+    private static void copyServerImage() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp)) {
+                    return;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
     private static void checkPrimary() {
         try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp)) {
             int notReachable = 0;
