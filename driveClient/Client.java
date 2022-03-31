@@ -20,9 +20,8 @@ public class Client {
     private static int secondaryPort;
     private static DataInputStream in;
     private static DataOutputStream out;
-    private static InputStream inData;
-    private static OutputStream outData;
     private static boolean primary = true;
+    private static boolean exit = false;
 
     public static void main(String args[]) {
         try (InputStream conf = new FileInputStream(config)) {
@@ -43,93 +42,91 @@ public class Client {
         try (Scanner sc = new Scanner(System.in)) {
             while (true) {
                 try (Socket c = new Socket(serverAddress, serverPort)) {
-                    try (Socket d = new Socket(serverAddress, serverPort + 1)) {
-                        System.out.println("Welcome to ucDrive 1.0");
+                    System.out.println("Welcome to ucDrive 1.0");
 
-                        // Input and output stream
-                        in = new DataInputStream(c.getInputStream());
-                        out = new DataOutputStream(c.getOutputStream());
+                    // Input and output stream
+                    in = new DataInputStream(c.getInputStream());
+                    out = new DataOutputStream(c.getOutputStream());
 
-                        inData = d.getInputStream();
-                        outData = d.getOutputStream();
+                    while (true) {
+                        String checkAuth = in.readUTF();
+                        if (checkAuth.equals("false"))
+                            authentication(sc);
 
-                        while (true) {
-                            String checkAuth = in.readUTF();
-                            if (checkAuth.equals("false"))
-                                authentication(sc);
+                        String currentDir = in.readUTF();
+                        System.out.print(currentDir + "> ");
 
-                            String currentDir = in.readUTF();
-                            System.out.print(currentDir + "> ");
-
-                            String[] command = sc.nextLine().trim().split("\\s+");
-                            if (command.length > 1) {
-                                if (command[1].charAt(0) == '-') {
-                                    command[0] = command[0] + " " + command[1];
-                                    command[1] = "";
-                                    for (int i = 2; i < command.length; i++)
-                                        if (i != command.length - 1)
-                                            command[1] += command[i] + " ";
-                                        else
-                                            command[1] += command[i];
-                                } else {
-                                    for (int i = 2; i < command.length; i++)
-                                        command[1] = command[1] + " " + command[i];
-                                }
-                                command[1].replace("[/\\<>:\"|?*]", "%20");
+                        String[] command = sc.nextLine().trim().split("\\s+");
+                        if (command.length > 1) {
+                            if (command[1].charAt(0) == '-') {
+                                command[0] = command[0] + " " + command[1];
+                                command[1] = "";
+                                for (int i = 2; i < command.length; i++)
+                                    if (i != command.length - 1)
+                                        command[1] += command[i] + " ";
+                                    else
+                                        command[1] += command[i];
+                            } else {
+                                for (int i = 2; i < command.length; i++)
+                                    command[1] = command[1] + " " + command[i];
                             }
-
-                            switch (command[0]) {
-                                case "passwd":
-                                    out.writeUTF(command[0]);
-                                    changePasswd(sc);
-                                    break;
-
-                                case "ls":
-                                    out.writeUTF(command[0]);
-                                    listDriveFiles(sc);
-                                    break;
-
-                                case "cd":
-                                    out.writeUTF(command[0]);
-                                    out.writeUTF(command[1]);
-                                    break;
-
-                                case "cd -p":
-                                    out.writeUTF(command[0]);
-                                    changeUserDir(sc, command[1]);
-                                    break;
-
-                                case "ls -p":
-                                    out.writeUTF(command[0]);
-                                    listUserFiles(sc);
-                                    break;
-
-                                case "get":
-                                    out.writeUTF(command[0]);
-                                    getFile(command[1]);
-                                    break;
-
-                                case "put":
-                                    out.writeUTF(command[0]);
-                                    putFile(command[1]);
-                                    break;
-
-                                case "server -primary":
-                                    out.writeUTF(command[0]);
-                                    changeServer(sc, "primary");
-                                    break;
-
-                                case "server -secondary":
-                                    out.writeUTF(command[0]);
-                                    changeServer(sc, "secondary");
-                                    break;
-
-                                case "exit":
-                                    out.writeUTF(command[0]);
-                                    break;
-                            }
-
+                            command[1].replace("[/\\<>:\"|?*]", "%20");
                         }
+
+                        switch (command[0]) {
+                            case "passwd":
+                                out.writeUTF(command[0]);
+                                changePasswd(sc);
+                                break;
+
+                            case "ls":
+                                out.writeUTF(command[0]);
+                                listDriveFiles(sc);
+                                break;
+
+                            case "cd":
+                                out.writeUTF(command[0]);
+                                out.writeUTF(command[1]);
+                                break;
+
+                            case "cd -p":
+                                out.writeUTF(command[0]);
+                                changeUserDir(sc, command[1]);
+                                break;
+
+                            case "ls -p":
+                                out.writeUTF(command[0]);
+                                listUserFiles(sc);
+                                break;
+
+                            case "get":
+                                out.writeUTF(command[0]);
+                                getFile(command[1]);
+                                break;
+
+                            case "put":
+                                out.writeUTF(command[0]);
+                                putFile(command[1]);
+                                break;
+
+                            case "server -primary":
+                                out.writeUTF(command[0]);
+                                changeServer(sc, "primary");
+                                break;
+
+                            case "server -secondary":
+                                out.writeUTF(command[0]);
+                                changeServer(sc, "secondary");
+                                break;
+
+                            case "exit":
+                                out.writeUTF(command[0]);
+                                exit = true;
+                                break;
+                        }
+                        if (exit)
+                            break;
+
                     }
 
                 } catch (UnknownHostException e) {
@@ -137,19 +134,20 @@ public class Client {
                 } catch (EOFException e) {
                     System.out.println("EOF: " + e.getMessage());
                 } catch (IOException e) {
-                    System.out.println("IO: " + e.getMessage());
                     if (primary) {
-                        System.out.println("Switching to secondary server!");
+                        System.out.println("Switching to secondary server...");
                         primary = false;
                         serverAddress = secondaryAddress;
                         serverPort = secondaryPort;
                     } else {
-                        System.out.println("Switching to primary server!");
+                        System.out.println("Switching to primary server...");
                         primary = true;
                         serverAddress = primaryAddress;
                         serverPort = primaryPort;
                     }
                 }
+                if (exit)
+                    break;
             }
         }
 
@@ -268,7 +266,9 @@ public class Client {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
+                        try (Socket d = new Socket(serverAddress, serverPort + 1)) {
+                            InputStream inData;
+                            inData = d.getInputStream();
                             String[] fileName = file.split("/");
                             byte[] b = new byte[1024];
                             FileOutputStream newFile = new FileOutputStream(
@@ -317,12 +317,14 @@ public class Client {
             out.writeUTF(file);
             File f = new File(currentDir + "/" + file);
             if (Files.isReadable(f.toPath())) {
+                long fileLength = f.length();
+                out.writeUTF(Long.toString(fileLength));
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
-                            long fileLength = f.length();
-                            out.writeUTF(Long.toString(fileLength));
+                        try (Socket d = new Socket(serverAddress, serverPort + 1)) {
+                            OutputStream outData;
+                            outData = d.getOutputStream();
                             FileInputStream send = new FileInputStream(currentDir + "/" + file);
                             BufferedInputStream bis = new BufferedInputStream(send);
                             byte[] b;
@@ -368,7 +370,9 @@ public class Client {
                 out.writeUTF("cancel");
                 System.out.println("put: file does not exist");
             }
-        } catch (IOException e) {
+        } catch (
+
+        IOException e) {
             System.out.println("IO:" + e);
         }
     }

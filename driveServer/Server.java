@@ -7,9 +7,9 @@ import java.util.Properties;
 
 // Primary server
 public class Server {
-    private static InetAddress serverAddress;
-    private static int serverPort;
-    private static int dataPort;
+    public static InetAddress serverAddress;
+    public static int serverPort;
+    public static int dataPort;
     private static int udpPort;
     private static InetAddress secondaryAddress;
     private static int secondaryPort;
@@ -40,26 +40,22 @@ public class Server {
             secondaryOnline();
             serverOnline();
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-                try (ServerSocket dataSocket = new ServerSocket(dataPort, 50, serverAddress)) {
-                    System.out.println("Listening On -> " + listenSocket);
-                    System.out.println("### - ucDrive Server Info - ###");
-                    try (InputStream in = new FileInputStream(usersFile)) {
-                        Server.users.load(in);
-                        in.close();
-                    } catch (IOException ex) {
-                        ex.printStackTrace();
-                    }
-                    while (true) {
-                        Socket clientCommandSocket = listenSocket.accept();
-                        Socket clientDataSocket = dataSocket.accept(); // BLOQUEANTE
-                        num++;
-                        System.out
-                                .println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket
-                                        + "\n-> Data Socket: " + clientDataSocket);
-                        new Connection(clientCommandSocket, clientDataSocket, num);
-                    }
-                } catch (IOException e) {
-                    System.out.println("Listen:" + e.getMessage());
+
+                backupServerImage(usersFile + " " + confFile);
+                System.out.println("Listening On -> " + listenSocket);
+                System.out.println("### - ucDrive Server Info - ###");
+                try (InputStream in = new FileInputStream(usersFile)) {
+                    Server.users.load(in);
+                    in.close();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+                while (true) {
+                    Socket clientCommandSocket = listenSocket.accept();
+                    num++;
+                    System.out
+                            .println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket);
+                    new Connection(clientCommandSocket, num);
                 }
             } catch (IOException e) {
                 System.out.println("Listen:" + e.getMessage());
@@ -67,10 +63,11 @@ public class Server {
         }
     }
 
-    private static void backupServerImage() {
+    public static void backupServerImage(String files) {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                String[] copy = files.split(" ");
                 try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
                     return;
                 } catch (IOException e) {
@@ -134,25 +131,22 @@ public class Server {
 class Connection extends Thread {
     DataInputStream in;
     DataOutputStream out;
-    InputStream inData;
-    OutputStream outData;
     Socket clientCommandSocket;
-    Socket clientDataSocket;
     int thread_number;
     boolean auth = false;
     Properties users = Server.users;
     String username;
     String currentDir = "home";
+    Properties userConfig = new Properties();
     String root = System.getProperty("user.dir").replace("\\", "/") + "/driveServer/Users";
 
-    public Connection(Socket commandClientSocket, Socket dataClientSocket, int num) {
+    public Connection(Socket commandClientSocket, int num) {
         try {
             thread_number = num;
             clientCommandSocket = commandClientSocket;
             in = new DataInputStream(clientCommandSocket.getInputStream());
             out = new DataOutputStream(clientCommandSocket.getOutputStream());
-            inData = dataClientSocket.getInputStream();
-            outData = dataClientSocket.getOutputStream();
+
             this.start();
         } catch (IOException e) {
             System.out.println("Connection:" + e.getMessage());
@@ -218,6 +212,24 @@ class Connection extends Thread {
             File home = new File(root + "/" + username + "/home");
             if (!home.exists() && !home.isDirectory())
                 home.mkdirs();
+
+            File conf = new File(root + "/" + username + "/" + username + ".properties");
+            if (!conf.exists() && !conf.isFile()) {
+                try (OutputStream output = new FileOutputStream(
+                        root + "/" + username + "/" + username + ".properties")) {
+                    userConfig.setProperty("currentDir", "home");
+                    userConfig.store(output, null);
+                } catch (IOException io) {
+                    io.printStackTrace();
+                }
+            } else {
+                try (InputStream input = new FileInputStream(root + "/" + username + "/" + username + ".properties")) {
+                    userConfig.load(input);
+                    currentDir = userConfig.getProperty("currentDir");
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
 
             auth = true;
         } catch (EOFException e) {
@@ -298,7 +310,13 @@ class Connection extends Thread {
                 if (dir.isDirectory())
                     currentDir = currentDir + "/" + newDir;
             }
-
+            try (OutputStream output = new FileOutputStream(
+                    root + "/" + username + "/" + username + ".properties")) {
+                userConfig.setProperty("currentDir", currentDir);
+                userConfig.store(output, null);
+            } catch (IOException io) {
+                io.printStackTrace();
+            }
         } catch (EOFException e) {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
@@ -317,7 +335,10 @@ class Connection extends Thread {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
+                        try (ServerSocket dataSocket = new ServerSocket(Server.dataPort, 50, Server.serverAddress)) {
+                            Socket dataClientSocket = dataSocket.accept();
+                            OutputStream outData;
+                            outData = dataClientSocket.getOutputStream();
                             FileInputStream send = new FileInputStream(
                                     root + "/" + username + "/" + currentDir + "/" + file);
                             BufferedInputStream bis = new BufferedInputStream(send);
@@ -361,7 +382,10 @@ class Connection extends Thread {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
+                        try (ServerSocket dataSocket = new ServerSocket(Server.dataPort, 50, Server.serverAddress)) {
+                            Socket dataClientSocket = dataSocket.accept();
+                            InputStream inData;
+                            inData = dataClientSocket.getInputStream();
                             Long fileSize = Long.parseLong(answer);
                             String[] fileName = file.split("/");
                             byte[] b = new byte[1024];
@@ -379,6 +403,8 @@ class Connection extends Thread {
                             bos.flush();
                             newFile.close();
                             out.writeUTF(currentDir);
+                            Server.backupServerImage(root + "/" + username + "/" + currentDir + "/"
+                                    + fileName[fileName.length - 1]);
                         } catch (IOException e) {
                             System.out.println("IO:" + e.getMessage());
                         }
