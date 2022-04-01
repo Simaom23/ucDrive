@@ -41,7 +41,8 @@ public class Server {
             serverOnline();
 
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-                backupServerImage(usersFile + " " + confFile);
+                sendBackup(usersFile.split("/")[1]);
+                sendBackup(confFile.split("/")[1]);
                 System.out.println("Listening On -> " + listenSocket);
                 System.out.println("### - ucDrive Server Info - ###");
                 try (InputStream in = new FileInputStream(usersFile)) {
@@ -63,15 +64,41 @@ public class Server {
         }
     }
 
-    public static void backupServerImage(String files) {
+    public synchronized static void sendBackup(String f) {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                String[] copy = files.split(" ");
-                try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
-                    return;
+                try (DatagramSocket aSocket = new DatagramSocket()) {
+                    boolean reachable = false;
+                    while (!reachable) {
+                        byte[] b = f.getBytes();
+                        DatagramPacket dp = new DatagramPacket(b, b.length, secondaryAddress, secondaryPort + 2);
+                        aSocket.send(dp);
+                        System.out.println("packetdatagram sent");
+
+                        try {
+                            aSocket.setSoTimeout(1000);
+        
+                            byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
+                            DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
+                                fileNameBuff.length);
+                            aSocket.receive(fileNamePacket); // Receive the datagram with the name of the file
+                            byte[] data = fileNamePacket.getData(); // Reading the name in bytes
+                            String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name to string
+
+                            System.out.println("received message: " + fileName);
+                        } catch (IOException e) {
+                            continue;
+                        }
+
+
+                        // ENVIAR CONTEUDO DO FICHEIRO
+
+                        
+                        reachable = true;
+                    }
                 } catch (IOException e) {
-                    System.out.println("IO:" + e);
+                    System.out.println(e);
                 }
             }
         }).start();
@@ -412,7 +439,7 @@ class Connection extends Thread {
                             bos.flush();
                             newFile.close();
                             out.writeUTF(currentDir);
-                            Server.backupServerImage(root + "/" + username + "/" + currentDir + "/"
+                            Server.sendBackup(root + "/" + username + "/" + currentDir + "/"
                                     + fileName[fileName.length - 1]);
                         } catch (IOException e) {
                             System.out.println("IO:" + e.getMessage());

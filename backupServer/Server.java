@@ -35,11 +35,13 @@ public class Server {
         }
 
         int num = 0;
-        while (true) {
-            try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-                checkPrimary();
-                serverOnline();
 
+        while (true) {
+            receiveBackup();
+            checkPrimary();
+            serverOnline();
+
+            try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
                 try (InputStream in = new FileInputStream(usersFile)) {
                     Server.users.load(in);
                     in.close();
@@ -68,19 +70,28 @@ public class Server {
         }
     }
 
-    public static void copyServerImage(String files) {
+    public static void receiveBackup() {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp)) {
+                try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp + 2)) {
                     try {
                         byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
                         DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
                                 fileNameBuff.length);
                         aSocket.receive(fileNamePacket); // Receive the datagram with the name of the file
                         byte[] data = fileNamePacket.getData(); // Reading the name in bytes
-                        String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name
-                                                                                           // to string
+                        String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name to string
+                        
+
+                        System.out.println("received filename: " + fileName);
+
+
+                        String s = "received datagram";
+                        data = s.getBytes();
+                        DatagramPacket reply = new DatagramPacket(data , data.length, primaryAddress, fileNamePacket.getPort());
+                        aSocket.send(reply);
+
                         File f = new File("backupServer/" + fileName); // Creating the file
                         FileOutputStream out = new FileOutputStream(f); // Creating the stream through which we
                         byte b[] = new byte[3072];
@@ -88,7 +99,6 @@ public class Server {
                             DatagramPacket dp = new DatagramPacket(b, b.length);
                             aSocket.receive(dp);
                         }
-
                     } catch (Exception ex) {
                         ex.printStackTrace();
                         System.exit(1);
@@ -98,7 +108,6 @@ public class Server {
                 }
             }
         }).start();
-
     }
 
     private static void checkPrimary() {
@@ -435,8 +444,8 @@ class Connection extends Thread {
                             bos.flush();
                             newFile.close();
                             out.writeUTF(currentDir);
-                            Server.copyServerImage(root + "/" + username + "/" + currentDir + "/"
-                                    + fileName[fileName.length - 1]);
+                            //Server.receiveBackup(root + "/" + username + "/" + currentDir + "/"
+                            //        + fileName[fileName.length - 1]);
                         } catch (IOException e) {
                             System.out.println("IO:" + e.getMessage());
                         }
