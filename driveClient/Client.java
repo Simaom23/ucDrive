@@ -24,6 +24,8 @@ public class Client {
     private static boolean exit = false;
 
     public static void main(String args[]) throws InterruptedException {
+
+        // Read config file
         try (InputStream conf = new FileInputStream(config)) {
             server.load(conf);
             conf.close();
@@ -34,7 +36,6 @@ public class Client {
         } catch (IOException ex) {
             ex.printStackTrace();
         }
-
         serverAddress = primaryAddress;
         serverPort = primaryPort;
 
@@ -49,13 +50,17 @@ public class Client {
                     out = new DataOutputStream(c.getOutputStream());
 
                     while (true) {
+
+                        // Authenticates user
                         String checkAuth = in.readUTF();
                         if (checkAuth.equals("false"))
                             authentication(sc);
 
+                        // Shows current directory in terminal
                         String currentDir = in.readUTF();
                         System.out.print(currentDir + "> ");
 
+                        // Parse input command
                         String[] command = sc.nextLine().trim().split("\\s+");
                         if (command.length > 1) {
                             if (command[1].charAt(0) == '-') {
@@ -127,6 +132,8 @@ public class Client {
                 } catch (EOFException e) {
                     System.out.println("EOF: " + e.getMessage());
                 } catch (IOException e) {
+                    
+                    // Switch servers automatically when they are down
                     if (primary) {
                         primary = false;
                         serverAddress = secondaryAddress;
@@ -193,9 +200,14 @@ public class Client {
         }
     }
 
+    // Receives files and directories names from server and prints them accordingly
     private static void listDriveFiles(Scanner sc) {
         try {
+
+            // Receive file list from server
             String files = in.readUTF();
+
+            // Print files
             String[] fileList = files.split(" ");
             for (String file : fileList) {
                 file = file.replace("%20", " ");
@@ -252,10 +264,14 @@ public class Client {
 
     private static void getFile(String file) {
         try {
+
+            // Sends name file to the server and waits for the confirmation
             out.writeUTF(file);
             String answer = in.readUTF();
             if (answer.equals("true")) {
                 Long fileSize = Long.parseLong(in.readUTF());
+
+                // Create new thread that will receive all the data from the server
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
@@ -291,6 +307,8 @@ public class Client {
                             System.out.println(GREEN + "\n\n" + fileName[fileName.length - 1] + " Downloaded!" + RESET);
                             bos.flush();
                             newFile.close();
+
+                            // Read new directory and display it
                             String dir = in.readUTF();
                             System.out.print(dir + "> ");
                         } catch (IOException e) {
@@ -307,11 +325,15 @@ public class Client {
 
     private static void putFile(String file) {
         try {
+
+            // Send the file name and size of the file
             out.writeUTF(file);
             File f = new File(currentDir + "/" + file);
             if (Files.isReadable(f.toPath())) {
                 long fileLength = f.length();
                 out.writeUTF(Long.toString(fileLength));
+
+                // Create new thread that will upload all the data to the server
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
@@ -355,6 +377,8 @@ public class Client {
                             }
                             System.out.println(GREEN + "\n\n" + file + " Uploaded!" + RESET);
                             send.close();
+
+                            // Read new directory and display it
                             String dir = in.readUTF();
                             System.out.print(dir + "> ");
                         } catch (EOFException e) {
@@ -375,6 +399,7 @@ public class Client {
         }
     }
 
+    // Updates the config file with the new data
     private static void changeServer(Scanner sc, String s) {
         System.out.print("Enter " + s + " server address: ");
         String newAddress = sc.nextLine();
