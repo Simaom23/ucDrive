@@ -7,12 +7,16 @@ import java.util.Properties;
 
 // Primary server
 public class Server {
-    public static InetAddress serverAddress;
-    public static int serverPort;
-    public static int dataPort;
-    private static int udpPort;
-    private static InetAddress secondaryAddress;
+    public static InetAddress primaryAddress;
+    public static int primaryPort;
+    public static int primaryDataPort;
+    private static int primaryUdpPort;
+    
+    public static InetAddress secondaryAddress;
     private static int secondaryPort;
+    public static int secondaryDataPort;
+    private static int secondaryUdpPort;
+
     public static String usersFile = "driveServer/users.properties";
     public static String confFile = "driveServer/conf.properties";
     public static Properties users = new Properties();
@@ -22,12 +26,17 @@ public class Server {
         try (InputStream in = new FileInputStream(confFile)) {
             Server.conf.load(in);
             in.close();
-            serverAddress = InetAddress.getByName(conf.getProperty("primary.address"));
-            serverPort = Integer.parseInt(conf.getProperty("primary.port"));
-            dataPort = Integer.parseInt(conf.getProperty("primary.port")) + 1;
-            udpPort = Integer.parseInt(conf.getProperty("primary.udp"));
+
+            primaryAddress = InetAddress.getByName(conf.getProperty("primary.address"));
+            primaryPort = Integer.parseInt(conf.getProperty("primary.port"));
+            primaryDataPort = Integer.parseInt(conf.getProperty("primary.port")) + 1;
+            primaryUdpPort = Integer.parseInt(conf.getProperty("primary.udp"));
+            
             secondaryAddress = InetAddress.getByName(conf.getProperty("secondary.address"));
-            secondaryPort = Integer.parseInt(conf.getProperty("secondary.udp"));
+            secondaryPort = Integer.parseInt(conf.getProperty("secondary.port"));
+            secondaryDataPort = Integer.parseInt(conf.getProperty("secondary.port")) + 1;
+            secondaryUdpPort = Integer.parseInt(conf.getProperty("secondary.udp"));
+        
         } catch (IOException ex) {
             ex.printStackTrace();
         } catch (NumberFormatException e) {
@@ -36,103 +45,104 @@ public class Server {
 
         int num = 0;
 
-        while (true) {
-            checkSecondary();
-            serverOnline();
+        ping();
+        pong();
 
-            try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-                sendBackup(usersFile);
-                // sendBackup(confFile);
-                System.out.println("Listening On -> " + listenSocket);
-                System.out.println("### - ucDrive Server Info - ###");
-                try (InputStream in = new FileInputStream(usersFile)) {
-                    Server.users.load(in);
-                    in.close();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-                while (true) {
-                    Socket clientCommandSocket = listenSocket.accept();
-                    num++;
-                    System.out
-                            .println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket);
-                    new Connection(clientCommandSocket, num);
-                }
-            } catch (IOException e) {
-                System.out.println("Listen:" + e.getMessage());
+        try (ServerSocket listenSocket = new ServerSocket(primaryPort, 50, primaryAddress)) {
+            sendBackup(usersFile);
+            //sendBackup(confFile);
+            System.out.println("Listening On -> " + listenSocket);
+            System.out.println("### - ucDrive Server Info - ###");
+            try (InputStream in = new FileInputStream(usersFile)) {
+                Server.users.load(in);
+                in.close();
+            } catch (IOException ex) {
+                ex.printStackTrace();
             }
+            while (true) {
+                Socket clientCommandSocket = listenSocket.accept();
+                num++;
+                System.out
+                        .println("[" + num + "] " + "New Connection:\n-> Command Socket: " + clientCommandSocket);
+                new Connection(clientCommandSocket, num);
+            }
+        } catch (IOException e) {
+            System.out.println("Listen:" + e.getMessage());
         }
     }
 
-    public static synchronized void receiveBackup() {
+    public static void receiveBackup() {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                try (DatagramSocket aSocket = new DatagramSocket(udpPort + 2)) {
-                    try {
-                        // Receive File Name
-                        byte[] fileNameBuff = new byte[1024];
-                        DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
-                                fileNameBuff.length);
-                        aSocket.receive(fileNamePacket);
-                        byte[] data = fileNamePacket.getData();
-                        String fileName = new String(data, 0, fileNamePacket.getLength());
-                        int port = fileNamePacket.getPort();
+                try (DatagramSocket aSocket = new DatagramSocket(primaryUdpPort + 2)) {
+                    while(true){
+                        try {
+                            byte[] b;
+                            DatagramPacket dp;
+                            String s = "ACKN";
 
-                        // Send ACKN
-                        String s = "ACKN";
-                        data = s.getBytes();
-                        DatagramPacket ackn = new DatagramPacket(data, data.length, secondaryAddress,
-                                port);
-                        aSocket.send(ackn);
-
-                        // Receive File Size
-                        byte[] fileSizeBuff = new byte[1024];
-                        DatagramPacket fileSizePacket = new DatagramPacket(fileSizeBuff,
-                                fileSizeBuff.length);
-                        aSocket.receive(fileSizePacket);
-                        data = fileSizePacket.getData();
-                        String sizeString = new String(data, 0, fileSizePacket.getLength());
-
-                        // Send ACKN
-                        s = "ACKN";
-                        data = s.getBytes();
-                        ackn = new DatagramPacket(data, data.length, secondaryAddress,
-                                port);
-                        aSocket.send(ackn);
-
-                        // Create File Stream
-                        long fileLength = Long.parseLong(sizeString);
-                        File f = new File("backupServer/" + fileName);
-                        FileOutputStream out = new FileOutputStream(f);
-                        BufferedOutputStream bos = new BufferedOutputStream(out);
-
-                        // Receive File via UDP
-                        long received = 0;
-                        byte[] message = new byte[1024];
-                        while (received != fileLength) {
-                            // Receive Data
-                            DatagramPacket receivedPacket = new DatagramPacket(message, message.length);
-                            aSocket.receive(receivedPacket);
-                            byte[] d = new byte[receivedPacket.getLength()];
-                            System.arraycopy(receivedPacket.getData(), receivedPacket.getOffset(), d, 0,
-                                    receivedPacket.getLength());
-                            bos.write(d);
-                            received += d.length;
+                            // Receive File Name
+                            b = new byte[1024];
+                            dp = new DatagramPacket(b,
+                                    b.length);
+                            aSocket.receive(dp);
+                            b = dp.getData();
+                            String fileName = new String(b, 0, dp.getLength());
+                            int port = dp.getPort();
 
                             // Send ACKN
-                            s = "ACKN";
-                            data = s.getBytes();
-                            ackn = new DatagramPacket(data, data.length, secondaryAddress,
+                            b = s.getBytes();
+                            dp = new DatagramPacket(b, b.length, secondaryAddress,
                                     port);
-                            aSocket.send(ackn);
-                        }
-                        bos.flush();
-                        out.close();
+                            aSocket.send(dp);
 
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
-                        System.exit(1);
+                            // Receive File Size
+                            b = new byte[1024];
+                            dp = new DatagramPacket(b,
+                                    b.length);
+                            aSocket.receive(dp);
+                            b = dp.getData();
+                            String sizeString = new String(b, 0, dp.getLength());
+
+                            // Send ACKN
+                            b = s.getBytes();
+                            dp = new DatagramPacket(b, b.length, secondaryAddress,
+                                    port);
+                            aSocket.send(dp);
+
+                            // Create File Stream
+                            long fileLength = Long.parseLong(sizeString);
+                            File f = new File("backupServer/" + fileName);
+                            FileOutputStream out = new FileOutputStream(f);
+                            BufferedOutputStream bos = new BufferedOutputStream(out);
+
+                            // Receive File via UDP
+                            long received = 0;
+                            byte[] message = new byte[1024];
+                            while (received != fileLength) {
+                                // Receive Data
+                                DatagramPacket receivedPacket = new DatagramPacket(message, message.length);
+                                aSocket.receive(receivedPacket);
+                                byte[] d = new byte[receivedPacket.getLength()];
+                                System.arraycopy(receivedPacket.getData(), receivedPacket.getOffset(), d, 0,
+                                        receivedPacket.getLength());
+                                bos.write(d);
+                                received += d.length;
+
+                                // Send ACKN
+                                b = s.getBytes();
+                                dp = new DatagramPacket(b, b.length, secondaryAddress,
+                                        port);
+                                aSocket.send(dp);
+                            }
+                            bos.flush();
+                            out.close();
+
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                            System.exit(1);
+                        }
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -141,97 +151,101 @@ public class Server {
         }).start();
     }
 
-    public static synchronized void sendBackup(String f) {
+    // This is the function responsible for the file synchronization amidst the 2 servers
+    public static void sendBackup(String f) {
+
+        // Creates new thread to send the updated file to the secondary server
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try (DatagramSocket aSocket = new DatagramSocket()) {
+                    byte[] b;
+                    DatagramPacket dp;
+
+                    // Send File Name
                     File newFile = new File(f);
-                    boolean reachable = false;
                     String[] fileDir = f.split("/");
+                    
                     String fileName = fileDir[fileDir.length - 1];
-                    long fileLength = newFile.length();
-                    while (!reachable) {
-                        // Send File Name
-                        byte[] b = fileName.getBytes();
-                        DatagramPacket fileNamePacket = new DatagramPacket(b, b.length, secondaryAddress,
-                                secondaryPort + 2);
-                        aSocket.send(fileNamePacket);
+                    while(true){
+                        b = f.getBytes();
+                        dp = new DatagramPacket(b, b.length, secondaryAddress,
+                                secondaryUdpPort + 2);
+                        aSocket.send(dp);
 
                         try {
                             aSocket.setSoTimeout(100);
                             // Receive ACKN
-                            byte[] acknBuff = new byte[1024];
-                            DatagramPacket ackn = new DatagramPacket(acknBuff,
-                                    acknBuff.length);
-                            aSocket.receive(ackn);
-                            ackn.getData();
+                            b = new byte[1024];
+                            dp = new DatagramPacket(b,
+                                    b.length);
+                            aSocket.receive(dp);
+
+                            break;
                         } catch (IOException e) {
                             continue;
                         }
+                    }
 
-                        // Send File Size
+                    // Send File Size
+                    long fileLength = newFile.length();
+                    String size = Long.toString(fileLength);
+
+                    while (true) {
+                        b = size.getBytes();
+                        dp = new DatagramPacket(b, b.length, secondaryAddress,
+                                secondaryUdpPort + 2);
+                        aSocket.send(dp);
+                        try {
+                            aSocket.setSoTimeout(100);
+                            // Receive ACKN
+                            b = new byte[1024];
+                            dp = new DatagramPacket(b,
+                                    b.length);
+                            aSocket.receive(dp);
+                            break;
+                        } catch (IOException e) {
+                            continue;
+                        }
+                    }
+
+                    // Create File Stream
+                    FileInputStream fis = new FileInputStream(f);
+                    BufferedInputStream bis = new BufferedInputStream(fis);
+
+                    // Send file via UDP
+                    long sent = 0;
+                    int byteSize = 1024;
+                    while (sent != fileLength) {
+                        if (fileLength - sent >= byteSize)
+                            sent += byteSize;
+                        else {
+                            byteSize = (int) (fileLength - sent);
+                            sent = fileLength;
+                        }
+
+                        // Send file data
+                        byte[] data = new byte[byteSize];
+                        bis.read(data);
+                        DatagramPacket sendPacket = new DatagramPacket(data, data.length, secondaryAddress,
+                                secondaryUdpPort + 2);
+                        aSocket.send(sendPacket);
+
                         while (true) {
-                            String size = Long.toString(fileLength);
-                            b = size.getBytes();
-                            DatagramPacket fileSizePacket = new DatagramPacket(b, b.length, secondaryAddress,
-                                    secondaryPort + 2);
-                            aSocket.send(fileSizePacket);
+                            b = new byte[1024];
+                            dp = new DatagramPacket(b, b.length);
                             try {
                                 aSocket.setSoTimeout(100);
                                 // Receive ACKN
-                                byte[] acknBuff = new byte[1024];
-                                DatagramPacket ackn = new DatagramPacket(acknBuff,
-                                        acknBuff.length);
-                                aSocket.receive(ackn);
-                                ackn.getData();
+                                aSocket.receive(dp);
                                 break;
-                            } catch (IOException e) {
-                                aSocket.send(fileSizePacket);
+                            } catch (SocketTimeoutException e) {
+                                aSocket.send(sendPacket);
                                 continue;
                             }
                         }
-
-                        // Create File Stream
-                        FileInputStream fis = new FileInputStream(f);
-                        BufferedInputStream bis = new BufferedInputStream(fis);
-
-                        // Send File via UDP
-                        long sent = 0;
-                        int byteSize = 1024;
-                        while (sent != fileLength) {
-                            if (fileLength - sent >= byteSize)
-                                sent += byteSize;
-                            else {
-                                byteSize = (int) (fileLength - sent);
-                                sent = fileLength;
-                            }
-
-                            // Send Data
-                            byte[] data = new byte[byteSize];
-                            bis.read(data);
-                            DatagramPacket sendPacket = new DatagramPacket(data, data.length, secondaryAddress,
-                                    secondaryPort + 2);
-                            aSocket.send(sendPacket);
-
-                            while (true) {
-                                byte[] acknBuff = new byte[1024];
-                                DatagramPacket ackn = new DatagramPacket(acknBuff, acknBuff.length);
-                                try {
-                                    aSocket.setSoTimeout(100);
-                                    // Receive ACKN
-                                    aSocket.receive(ackn);
-                                    ackn.getData();
-                                    break;
-                                } catch (SocketTimeoutException e) {
-                                    aSocket.send(sendPacket);
-                                    continue;
-                                }
-                            }
-                        }
-                        fis.close();
-                        reachable = true;
                     }
+                    fis.close();
                 } catch (IOException e) {
                     System.out.println(e);
                 }
@@ -239,55 +253,76 @@ public class Server {
         }).start();
     }
 
-    private static void checkSecondary() {
-        try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
-            int notReachable = 0;
-            while (notReachable < 5) {
-                String str = "PING";
-                byte[] buf = new byte[1024];
-                buf = str.getBytes();
+    private static void ping() {
+        while(true){
+            try (DatagramSocket aSocket = new DatagramSocket(primaryUdpPort)) {
 
-                // Create a datagram packet to send as an UDP packet
-                DatagramPacket ping = new DatagramPacket(buf, buf.length, secondaryAddress, secondaryPort);
-                // Send the Ping datagram to the specified server
-                aSocket.send(ping);
+                receiveBackup();
 
-                // Try to receive the packet - but it can fail (timeout)
-                try {
-                    // Set up the timeout 1000 ms = 1 sec
-                    aSocket.setSoTimeout(1000);
+                int notReachable = 0;
+                while (notReachable < 5) {
+                    String str = "PING";
+                    byte[] buf = new byte[1024];
+                    buf = str.getBytes();
 
-                    // Set up an UPD packet for recieving
-                    DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+                    // Create a datagram packet to send as an UDP packet
+                    DatagramPacket ping = new DatagramPacket(buf, buf.length, secondaryAddress, secondaryUdpPort);
+                    // Send the Ping datagram to the specified server
+                    aSocket.send(ping);
 
-                    // Try to receive the response from the ping
-                    aSocket.receive(response);
-                } catch (IOException e) {
-                    // Print which packet has timed out
-                    notReachable++;
-                    System.out.println("Timeout " + notReachable);
-                    continue;
+                    // Try to receive the packet - but it can fail (timeout)
+                    try {
+                        // Set up the timeout 1000 ms = 1 sec
+                        aSocket.setSoTimeout(1000);
+
+                        // Set up an UPD packet for recieving
+                        DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
+
+                        // Try to receive the response from the ping
+                        aSocket.receive(response);
+                    } catch (IOException e) {
+                        // Print which packet has timed out
+                        notReachable++;
+                        System.out.println("Timeout " + notReachable);
+                        continue;
+                    }
+                    notReachable = 0;
                 }
-                notReachable = 0;
+            } catch (Exception e) {
+                InetAddress primaryAddressAux = primaryAddress;
+                int primaryPortAux = primaryPort;
+                int primaryDataPortAux = primaryDataPort;
+                int primaryUdpPortAux = primaryUdpPort;
+
+                primaryAddress = secondaryAddress;
+                primaryPort = secondaryPort;
+                primaryDataPort = secondaryDataPort;
+                primaryUdpPort = secondaryUdpPort;
+
+                secondaryAddress = primaryAddressAux;
+                secondaryPort = primaryPortAux;
+                secondaryDataPort = primaryDataPortAux;
+                secondaryUdpPort = primaryUdpPortAux;
+
+                continue;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+            break;
         }
     }
 
-    private static void serverOnline() {
+    private static void pong() {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                try (DatagramSocket aSocket = new DatagramSocket(udpPort)) {
+                try (DatagramSocket aSocket = new DatagramSocket(primaryUdpPort)) {
                     while (true) {
                         byte[] buffer = new byte[1024];
                         DatagramPacket reply = new DatagramPacket(buffer, buffer.length);
                         aSocket.receive(reply);
-                        String str = "PONG";
+                        String str = "pong";
                         buffer = str.getBytes();
                         InetAddress host = reply.getAddress();
-                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, host, secondaryPort);
+                        DatagramPacket request = new DatagramPacket(buffer, buffer.length, host, secondaryUdpPort);
                         aSocket.send(request);
                     }
                 } catch (IOException e) {
@@ -324,9 +359,12 @@ class Connection extends Thread {
         }
     }
 
+    // Handles all the requests from the client and parses them
     public void run() {
         try {
             while (true) {
+
+                // Check if the user is logged in
                 if (auth)
                     out.writeUTF("true");
                 else {
@@ -334,8 +372,10 @@ class Connection extends Thread {
                     authentication();
                 }
 
+                // Send the client the current directory
                 out.writeUTF(currentDir);
 
+                // Receive command from client
                 String command = in.readUTF();
                 switch (command) {
                     case "passwd":
@@ -369,9 +409,12 @@ class Connection extends Thread {
     private void authentication() {
         try {
             while (true) {
-                username = in.readUTF();
+
+                // Receives username from client and password from client
+                username = in.readUTF(); 
                 String password = in.readUTF();
 
+                // Checks the credentials and responds to the client
                 if (users.getProperty(username + ".password") != null
                         && password.equals(users.getProperty(username + ".password"))) {
                     out.writeUTF("true");
@@ -380,6 +423,7 @@ class Connection extends Thread {
                     out.writeUTF("false");
             }
 
+            // Load all the data about the user that logged in previously
             File home = new File(root + "/" + username + "/home");
             if (!home.exists() && !home.isDirectory())
                 home.mkdirs();
@@ -412,9 +456,15 @@ class Connection extends Thread {
 
     private void changePasswd() {
         try {
+
+            // Gets current password to check if it is right
             String currentPasswd = in.readUTF();
             if (currentPasswd.equals(users.getProperty(username + ".password"))) {
+                
+                // Respond to client saying the password is correct
                 out.writeUTF("true");
+
+                // Reads new password and verification and parses them responding to the client in the end
                 String newPasswd = in.readUTF();
                 String rePasswd = in.readUTF();
                 if (newPasswd.equals(rePasswd))
@@ -422,6 +472,7 @@ class Connection extends Thread {
                         users.setProperty(username + ".password", newPasswd);
                         users.store(o, null);
                         o.close();
+
                         out.writeUTF("passwd: password updated successfully");
                         auth = false;
                     } catch (IOException ex) {
@@ -442,6 +493,8 @@ class Connection extends Thread {
 
     private void listFiles() {
         try {
+
+            // Get file list and parse it
             File dir = new File(root + "/" + username + "/" + currentDir);
             String[] fileList = dir.list();
             String directories = "";
@@ -452,7 +505,10 @@ class Connection extends Thread {
                     fileList[i] = "/" + fileList[i];
                 directories += fileList[i] + " ";
             }
+
+            // Return the file list to the client
             out.writeUTF(directories);
+
         } catch (EOFException e) {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
@@ -462,7 +518,13 @@ class Connection extends Thread {
 
     private void changeDir() {
         try {
+            // Receive new directory from client
             String newDir = in.readUTF();
+
+            if (newDir.equals(""))
+                return;
+
+            // Parses new directory with due restrictions
             if (newDir.equals("..") && !currentDir.equals("home")) {
                 String[] directory = currentDir.split("/");
                 String current = "";
@@ -488,6 +550,8 @@ class Connection extends Thread {
             } catch (IOException io) {
                 io.printStackTrace();
             }
+
+            Server.sendBackup(root + "/" + username + "/" + username + ".properties");
         } catch (EOFException e) {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
@@ -497,16 +561,22 @@ class Connection extends Thread {
 
     private void getFile() {
         try {
+            // Receive filename
             String file = in.readUTF();
+
             File f = new File(root + "/" + username + "/" + currentDir + "/" + file);
             if (Files.isReadable(f.toPath())) {
+                
+                // Gives response to client saying it is downloadable and its size
                 out.writeUTF("true");
                 long fileLength = f.length();
                 out.writeUTF(Long.toString(fileLength));
+                
+                // Creates new thread that will send the file to the client
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try (ServerSocket dataSocket = new ServerSocket(Server.dataPort, 50, Server.serverAddress)) {
+                        try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50, Server.primaryAddress)) {
                             Socket dataClientSocket = dataSocket.accept();
                             OutputStream outData;
                             outData = dataClientSocket.getOutputStream();
@@ -547,13 +617,18 @@ class Connection extends Thread {
 
     private void putFile() {
         try {
+
+            // Receive file name and the confirmation to upload
             String file = in.readUTF();
             String answer = in.readUTF();
+
             if (!answer.equals("cancel")) {
+
+                // Creates the new thread that will receive all the data from the client and create the respective file
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try (ServerSocket dataSocket = new ServerSocket(Server.dataPort, 50, Server.serverAddress)) {
+                        try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50, Server.primaryAddress)) {
                             Socket dataClientSocket = dataSocket.accept();
                             InputStream inData;
                             inData = dataClientSocket.getInputStream();
@@ -574,6 +649,7 @@ class Connection extends Thread {
                             bos.flush();
                             newFile.close();
                             out.writeUTF(currentDir);
+
                             Server.sendBackup(root + "/" + username + "/" + currentDir + "/"
                                     + fileName[fileName.length - 1]);
                         } catch (IOException e) {

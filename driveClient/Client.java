@@ -89,7 +89,10 @@ public class Client {
                                 break;
 
                             case "cd":
-                                out.writeUTF(command[1]);
+                                if (command.length != 1)
+                                    out.writeUTF(command[1]);
+                                else
+                                    out.writeUTF("");
                                 break;
 
                             case "cd -p":
@@ -209,6 +212,10 @@ public class Client {
 
             // Print files
             String[] fileList = files.split(" ");
+
+            if(fileList.length == 1 && fileList[0].equals(""))
+                return;
+
             for (String file : fileList) {
                 file = file.replace("%20", " ");
                 if (file.charAt(0) == '/') {
