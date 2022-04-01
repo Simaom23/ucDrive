@@ -315,6 +315,11 @@ public class Client {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e1) {
+                            e1.printStackTrace();
+                        }
                         try (Socket d = new Socket(serverAddress, serverPort + 1)) {
                             OutputStream outData;
                             outData = d.getOutputStream();

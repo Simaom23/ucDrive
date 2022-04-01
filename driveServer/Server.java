@@ -41,8 +41,8 @@ public class Server {
             serverOnline();
 
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
-                sendBackup(usersFile.split("/")[1]);
-                sendBackup(confFile.split("/")[1]);
+                sendBackup(usersFile);
+                // sendBackup(confFile);
                 System.out.println("Listening On -> " + listenSocket);
                 System.out.println("### - ucDrive Server Info - ###");
                 try (InputStream in = new FileInputStream(usersFile)) {
@@ -64,37 +64,145 @@ public class Server {
         }
     }
 
-    public synchronized static void sendBackup(String f) {
+    public static synchronized void receiveBackup() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try (DatagramSocket aSocket = new DatagramSocket(secondaryPort + 2)) {
+                    try {
+                        byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
+                        DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
+                                fileNameBuff.length);
+                        aSocket.receive(fileNamePacket); // Receive the datagram with the name of the file
+                        byte[] data = fileNamePacket.getData(); // Reading the name in bytes
+                        String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name to
+                                                                                           // string
+
+                        System.out.println("received filename: " + fileName);
+
+                        String s = "ACKN";
+                        data = s.getBytes();
+                        DatagramPacket reply = new DatagramPacket(data, data.length, secondaryAddress,
+                                fileNamePacket.getPort());
+                        aSocket.send(reply);
+
+                        byte[] fileSizeBuff = new byte[1024]; // Where we store the data of datagram of the name
+                        DatagramPacket fileSizePacket = new DatagramPacket(fileSizeBuff,
+                                fileSizeBuff.length);
+                        aSocket.receive(fileSizePacket); // Receive the datagram with the name of the file
+                        data = fileSizePacket.getData(); // Reading the name in bytes
+                        String sizeString = new String(data, 0, fileSizePacket.getLength());
+                        System.out.println(sizeString);
+
+                        s = "ACKN";
+                        data = s.getBytes();
+                        reply = new DatagramPacket(data, data.length, secondaryAddress,
+                                fileNamePacket.getPort());
+                        aSocket.send(reply);
+
+                        long fileLength = Long.parseLong(sizeString);
+                        File f = new File("backupServer/" + fileName); // Creating the file
+                        FileOutputStream outToFile = new FileOutputStream(f);
+                        long received = 0;
+                        while (received < fileLength) {
+                            byte[] message = new byte[1024];
+                            DatagramPacket receivedPacket = new DatagramPacket(message, message.length);
+                            aSocket.receive(receivedPacket);
+                            message = receivedPacket.getData();
+                            outToFile.write(message);
+                            received += message.length;
+                            s = "ACKN";
+                            data = s.getBytes();
+                            reply = new DatagramPacket(data, data.length, secondaryAddress,
+                                    fileNamePacket.getPort());
+                            aSocket.send(reply);
+
+                        }
+                        outToFile.close();
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        System.exit(1);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    public static synchronized void sendBackup(String f) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try (DatagramSocket aSocket = new DatagramSocket()) {
                     boolean reachable = false;
+                    String[] fileDir = f.split("/");
+                    String fileToSend = fileDir[fileDir.length - 1];
                     while (!reachable) {
-                        byte[] b = f.getBytes();
+                        byte[] b = fileToSend.getBytes();
                         DatagramPacket dp = new DatagramPacket(b, b.length, secondaryAddress, secondaryPort + 2);
                         aSocket.send(dp);
                         System.out.println("packetdatagram sent");
 
                         try {
                             aSocket.setSoTimeout(1000);
-        
+
                             byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
                             DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
-                                fileNameBuff.length);
-                            aSocket.receive(fileNamePacket); // Receive the datagram with the name of the file
-                            byte[] data = fileNamePacket.getData(); // Reading the name in bytes
-                            String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name to string
-
+                                    fileNameBuff.length);
+                            aSocket.receive(fileNamePacket);
+                            byte[] data = fileNamePacket.getData();
+                            String fileName = new String(data, 0, fileNamePacket.getLength());
                             System.out.println("received message: " + fileName);
+
                         } catch (IOException e) {
                             continue;
                         }
 
+                        long fileLength = f.length();
+                        String size = Long.toString(fileLength);
+                        System.out.println(size);
+                        b = size.getBytes();
+                        dp = new DatagramPacket(b, b.length, secondaryAddress, secondaryPort + 2);
+                        aSocket.send(dp);
 
-                        // ENVIAR CONTEUDO DO FICHEIRO
+                        byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
+                        DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
+                                fileNameBuff.length);
+                        aSocket.receive(fileNamePacket);
+                        byte[] data = fileNamePacket.getData();
+                        String fileName = new String(data, 0, fileNamePacket.getLength());
+                        System.out.println("received message: " + fileName);
 
-                        
+                        // Read File
+                        FileInputStream fis = null;
+                        byte[] bArray = new byte[(int) f.length()];
+                        fis = new FileInputStream(f);
+                        fis.read(bArray);
+                        fis.close();
+                        boolean flag = false;
+                        for (int i = 0; i < bArray.length; i = i + 1024) {
+                            byte[] message = new byte[1024];
+                            if ((i + 1024) >= bArray.length)
+                                flag = true;
+
+                            if (!flag)
+                                System.arraycopy(bArray, i, message, 0, 1024);
+                            else
+                                System.arraycopy(bArray, i, message, 0, bArray.length - i);
+
+                            DatagramPacket sendPacket = new DatagramPacket(message, message.length, secondaryAddress,
+                                    secondaryPort + 2);
+                            aSocket.send(sendPacket);
+
+                            byte[] ackn = new byte[1024];
+                            DatagramPacket received = new DatagramPacket(ackn, ackn.length);
+                            aSocket.receive(received);
+
+                            if (flag)
+                                break;
+                        }
                         reachable = true;
                     }
                 } catch (IOException e) {

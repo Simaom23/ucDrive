@@ -70,7 +70,7 @@ public class Server {
         }
     }
 
-    public static void receiveBackup() {
+    public static synchronized void receiveBackup() {
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -81,30 +81,138 @@ public class Server {
                                 fileNameBuff.length);
                         aSocket.receive(fileNamePacket); // Receive the datagram with the name of the file
                         byte[] data = fileNamePacket.getData(); // Reading the name in bytes
-                        String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name to string
-                        
+                        String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name to
+                                                                                           // string
 
                         System.out.println("received filename: " + fileName);
 
-
-                        String s = "received datagram";
+                        String s = "ACKN";
                         data = s.getBytes();
-                        DatagramPacket reply = new DatagramPacket(data , data.length, primaryAddress, fileNamePacket.getPort());
+                        DatagramPacket reply = new DatagramPacket(data, data.length, primaryAddress,
+                                fileNamePacket.getPort());
                         aSocket.send(reply);
 
+                        byte[] fileSizeBuff = new byte[1024]; // Where we store the data of datagram of the name
+                        DatagramPacket fileSizePacket = new DatagramPacket(fileSizeBuff,
+                                fileSizeBuff.length);
+                        aSocket.receive(fileSizePacket); // Receive the datagram with the name of the file
+                        data = fileSizePacket.getData(); // Reading the name in bytes
+                        String sizeString = new String(data, 0, fileSizePacket.getLength());
+                        System.out.println(sizeString);
+
+                        s = "ACKN";
+                        data = s.getBytes();
+                        reply = new DatagramPacket(data, data.length, primaryAddress,
+                                fileNamePacket.getPort());
+                        aSocket.send(reply);
+
+                        long fileLength = Long.parseLong(sizeString);
                         File f = new File("backupServer/" + fileName); // Creating the file
-                        FileOutputStream out = new FileOutputStream(f); // Creating the stream through which we
-                        byte b[] = new byte[3072];
-                        while (true) {
-                            DatagramPacket dp = new DatagramPacket(b, b.length);
-                            aSocket.receive(dp);
+                        FileOutputStream outToFile = new FileOutputStream(f);
+                        long received = 0;
+                        while (received < fileLength) {
+                            byte[] message = new byte[1024];
+                            DatagramPacket receivedPacket = new DatagramPacket(message, message.length);
+                            aSocket.receive(receivedPacket);
+                            message = receivedPacket.getData();
+                            outToFile.write(message);
+                            received += message.length;
+                            s = "ACKN";
+                            data = s.getBytes();
+                            reply = new DatagramPacket(data, data.length, primaryAddress,
+                                    fileNamePacket.getPort());
+                            aSocket.send(reply);
+
                         }
+                        outToFile.close();
+
                     } catch (Exception ex) {
                         ex.printStackTrace();
                         System.exit(1);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    public static synchronized void sendBackup(String f) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try (DatagramSocket aSocket = new DatagramSocket()) {
+                    boolean reachable = false;
+                    String[] fileDir = f.split("/");
+                    String fileToSend = fileDir[fileDir.length - 1];
+                    while (!reachable) {
+                        byte[] b = fileToSend.getBytes();
+                        DatagramPacket dp = new DatagramPacket(b, b.length, primaryAddress, primaryPort + 2);
+                        aSocket.send(dp);
+                        System.out.println("packetdatagram sent");
+
+                        try {
+                            aSocket.setSoTimeout(1000);
+
+                            byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
+                            DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
+                                    fileNameBuff.length);
+                            aSocket.receive(fileNamePacket);
+                            byte[] data = fileNamePacket.getData();
+                            String fileName = new String(data, 0, fileNamePacket.getLength());
+                            System.out.println("received message: " + fileName);
+
+                        } catch (IOException e) {
+                            continue;
+                        }
+
+                        long fileLength = f.length();
+                        String size = Long.toString(fileLength);
+                        System.out.println(size);
+                        b = size.getBytes();
+                        dp = new DatagramPacket(b, b.length, primaryAddress, primaryPort + 2);
+                        aSocket.send(dp);
+
+                        byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
+                        DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
+                                fileNameBuff.length);
+                        aSocket.receive(fileNamePacket);
+                        byte[] data = fileNamePacket.getData();
+                        String fileName = new String(data, 0, fileNamePacket.getLength());
+                        System.out.println("received message: " + fileName);
+
+                        // Read File
+                        FileInputStream fis = null;
+                        byte[] bArray = new byte[(int) f.length()];
+                        fis = new FileInputStream(f);
+                        fis.read(bArray);
+                        fis.close();
+                        boolean flag = false;
+                        for (int i = 0; i < bArray.length; i = i + 1024) {
+                            byte[] message = new byte[1024];
+                            if ((i + 1024) >= bArray.length)
+                                flag = true;
+
+                            if (!flag)
+                                System.arraycopy(bArray, i, message, 0, 1024);
+                            else
+                                System.arraycopy(bArray, i, message, 0, bArray.length - i);
+
+                            DatagramPacket sendPacket = new DatagramPacket(message, message.length, primaryAddress,
+                                    primaryPort + 2);
+                            aSocket.send(sendPacket);
+
+                            byte[] ackn = new byte[1024];
+                            DatagramPacket received = new DatagramPacket(ackn, ackn.length);
+                            aSocket.receive(received);
+
+                            if (flag)
+                                break;
+                        }
+                        reachable = true;
+                    }
+                } catch (IOException e) {
+                    System.out.println(e);
                 }
             }
         }).start();
@@ -444,8 +552,8 @@ class Connection extends Thread {
                             bos.flush();
                             newFile.close();
                             out.writeUTF(currentDir);
-                            //Server.receiveBackup(root + "/" + username + "/" + currentDir + "/"
-                            //        + fileName[fileName.length - 1]);
+                            // Server.receiveBackup(root + "/" + username + "/" + currentDir + "/"
+                            // + fileName[fileName.length - 1]);
                         } catch (IOException e) {
                             System.out.println("IO:" + e.getMessage());
                         }
