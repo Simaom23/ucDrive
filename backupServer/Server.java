@@ -76,55 +76,65 @@ public class Server {
             public void run() {
                 try (DatagramSocket aSocket = new DatagramSocket(secondaryUdp + 2)) {
                     try {
-                        byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
+                        // Receive File Name
+                        byte[] fileNameBuff = new byte[1024];
                         DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
                                 fileNameBuff.length);
-                        aSocket.receive(fileNamePacket); // Receive the datagram with the name of the file
-                        byte[] data = fileNamePacket.getData(); // Reading the name in bytes
-                        String fileName = new String(data, 0, fileNamePacket.getLength()); // Converting the name to
-                                                                                           // string
+                        aSocket.receive(fileNamePacket);
+                        byte[] data = fileNamePacket.getData();
+                        String fileName = new String(data, 0, fileNamePacket.getLength());
+                        int port = fileNamePacket.getPort();
 
-                        System.out.println("received filename: " + fileName);
-
+                        // Send ACKN
                         String s = "ACKN";
                         data = s.getBytes();
-                        DatagramPacket reply = new DatagramPacket(data, data.length, primaryAddress,
-                                fileNamePacket.getPort());
-                        aSocket.send(reply);
+                        DatagramPacket ackn = new DatagramPacket(data, data.length, primaryAddress,
+                                port);
+                        aSocket.send(ackn);
 
-                        byte[] fileSizeBuff = new byte[1024]; // Where we store the data of datagram of the name
+                        // Receive File Size
+                        byte[] fileSizeBuff = new byte[1024];
                         DatagramPacket fileSizePacket = new DatagramPacket(fileSizeBuff,
                                 fileSizeBuff.length);
-                        aSocket.receive(fileSizePacket); // Receive the datagram with the name of the file
-                        data = fileSizePacket.getData(); // Reading the name in bytes
+                        aSocket.receive(fileSizePacket);
+                        data = fileSizePacket.getData();
                         String sizeString = new String(data, 0, fileSizePacket.getLength());
-                        System.out.println(sizeString);
 
+                        // Send ACKN
                         s = "ACKN";
                         data = s.getBytes();
-                        reply = new DatagramPacket(data, data.length, primaryAddress,
-                                fileNamePacket.getPort());
-                        aSocket.send(reply);
+                        ackn = new DatagramPacket(data, data.length, primaryAddress,
+                                port);
+                        aSocket.send(ackn);
 
+                        // Create File Stream
                         long fileLength = Long.parseLong(sizeString);
-                        File f = new File("backupServer/" + fileName); // Creating the file
-                        FileOutputStream outToFile = new FileOutputStream(f);
+                        File f = new File("backupServer/" + fileName);
+                        FileOutputStream out = new FileOutputStream(f);
+                        BufferedOutputStream bos = new BufferedOutputStream(out);
+
+                        // Receive File via UDP
                         long received = 0;
-                        while (received < fileLength) {
-                            byte[] message = new byte[1024];
+                        byte[] message = new byte[1024];
+                        while (received != fileLength) {
+                            // Receive Data
                             DatagramPacket receivedPacket = new DatagramPacket(message, message.length);
                             aSocket.receive(receivedPacket);
-                            message = receivedPacket.getData();
-                            outToFile.write(message);
-                            received += message.length;
+                            byte[] d = new byte[receivedPacket.getLength()];
+                            System.arraycopy(receivedPacket.getData(), receivedPacket.getOffset(), d, 0,
+                                    receivedPacket.getLength());
+                            bos.write(d);
+                            received += d.length;
+
+                            // Send ACKN
                             s = "ACKN";
                             data = s.getBytes();
-                            reply = new DatagramPacket(data, data.length, primaryAddress,
-                                    fileNamePacket.getPort());
-                            aSocket.send(reply);
-
+                            ackn = new DatagramPacket(data, data.length, primaryAddress,
+                                    port);
+                            aSocket.send(ackn);
                         }
-                        outToFile.close();
+                        bos.flush();
+                        out.close();
 
                     } catch (Exception ex) {
                         ex.printStackTrace();
@@ -142,73 +152,90 @@ public class Server {
             @Override
             public void run() {
                 try (DatagramSocket aSocket = new DatagramSocket()) {
+                    File newFile = new File(f);
                     boolean reachable = false;
                     String[] fileDir = f.split("/");
-                    String fileToSend = fileDir[fileDir.length - 1];
+                    String fileName = fileDir[fileDir.length - 1];
+                    long fileLength = newFile.length();
                     while (!reachable) {
-                        byte[] b = fileToSend.getBytes();
-                        DatagramPacket dp = new DatagramPacket(b, b.length, primaryAddress, primaryPort + 2);
-                        aSocket.send(dp);
-                        System.out.println("packetdatagram sent");
+                        // Send File Name
+                        byte[] b = fileName.getBytes();
+                        DatagramPacket fileNamePacket = new DatagramPacket(b, b.length, primaryAddress,
+                                primaryPort + 2);
+                        aSocket.send(fileNamePacket);
 
                         try {
-                            aSocket.setSoTimeout(1000);
-
-                            byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
-                            DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
-                                    fileNameBuff.length);
-                            aSocket.receive(fileNamePacket);
-                            byte[] data = fileNamePacket.getData();
-                            String fileName = new String(data, 0, fileNamePacket.getLength());
-                            System.out.println("received message: " + fileName);
-
+                            aSocket.setSoTimeout(100);
+                            // Receive ACKN
+                            byte[] acknBuff = new byte[1024];
+                            DatagramPacket ackn = new DatagramPacket(acknBuff,
+                                    acknBuff.length);
+                            aSocket.receive(ackn);
+                            ackn.getData();
                         } catch (IOException e) {
                             continue;
                         }
 
-                        long fileLength = f.length();
-                        String size = Long.toString(fileLength);
-                        System.out.println(size);
-                        b = size.getBytes();
-                        dp = new DatagramPacket(b, b.length, primaryAddress, primaryPort + 2);
-                        aSocket.send(dp);
+                        // Send File Size
+                        while (true) {
+                            String size = Long.toString(fileLength);
+                            b = size.getBytes();
+                            DatagramPacket fileSizePacket = new DatagramPacket(b, b.length, primaryAddress,
+                                    primaryPort + 2);
+                            aSocket.send(fileSizePacket);
+                            try {
+                                aSocket.setSoTimeout(100);
+                                // Receive ACKN
+                                byte[] acknBuff = new byte[1024];
+                                DatagramPacket ackn = new DatagramPacket(acknBuff,
+                                        acknBuff.length);
+                                aSocket.receive(ackn);
+                                ackn.getData();
+                                break;
+                            } catch (IOException e) {
+                                aSocket.send(fileSizePacket);
+                                continue;
+                            }
+                        }
 
-                        byte[] fileNameBuff = new byte[1024]; // Where we store the data of datagram of the name
-                        DatagramPacket fileNamePacket = new DatagramPacket(fileNameBuff,
-                                fileNameBuff.length);
-                        aSocket.receive(fileNamePacket);
-                        byte[] data = fileNamePacket.getData();
-                        String fileName = new String(data, 0, fileNamePacket.getLength());
-                        System.out.println("received message: " + fileName);
+                        // Create File Stream
+                        FileInputStream fis = new FileInputStream(f);
+                        BufferedInputStream bis = new BufferedInputStream(fis);
 
-                        // Read File
-                        FileInputStream fis = null;
-                        byte[] bArray = new byte[(int) f.length()];
-                        fis = new FileInputStream(f);
-                        fis.read(bArray);
-                        fis.close();
-                        boolean flag = false;
-                        for (int i = 0; i < bArray.length; i = i + 1024) {
-                            byte[] message = new byte[1024];
-                            if ((i + 1024) >= bArray.length)
-                                flag = true;
+                        // Send File via UDP
+                        long sent = 0;
+                        int byteSize = 1024;
+                        while (sent != fileLength) {
+                            if (fileLength - sent >= byteSize)
+                                sent += byteSize;
+                            else {
+                                byteSize = (int) (fileLength - sent);
+                                sent = fileLength;
+                            }
 
-                            if (!flag)
-                                System.arraycopy(bArray, i, message, 0, 1024);
-                            else
-                                System.arraycopy(bArray, i, message, 0, bArray.length - i);
-
-                            DatagramPacket sendPacket = new DatagramPacket(message, message.length, primaryAddress,
+                            // Send Data
+                            byte[] data = new byte[byteSize];
+                            bis.read(data);
+                            DatagramPacket sendPacket = new DatagramPacket(data, data.length, primaryAddress,
                                     primaryPort + 2);
                             aSocket.send(sendPacket);
 
-                            byte[] ackn = new byte[1024];
-                            DatagramPacket received = new DatagramPacket(ackn, ackn.length);
-                            aSocket.receive(received);
-
-                            if (flag)
-                                break;
+                            while (true) {
+                                byte[] acknBuff = new byte[1024];
+                                DatagramPacket ackn = new DatagramPacket(acknBuff, acknBuff.length);
+                                try {
+                                    aSocket.setSoTimeout(100);
+                                    // Receive ACKN
+                                    aSocket.receive(ackn);
+                                    ackn.getData();
+                                    break;
+                                } catch (SocketTimeoutException e) {
+                                    aSocket.send(sendPacket);
+                                    continue;
+                                }
+                            }
                         }
+                        fis.close();
                         reachable = true;
                     }
                 } catch (IOException e) {
