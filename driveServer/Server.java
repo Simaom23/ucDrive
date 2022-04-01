@@ -42,7 +42,7 @@ public class Server {
 
             try (ServerSocket listenSocket = new ServerSocket(serverPort, 50, serverAddress)) {
                 sendBackup(usersFile);
-                sendBackup(confFile);
+                // sendBackup(confFile);
                 System.out.println("Listening On -> " + listenSocket);
                 System.out.println("### - ucDrive Server Info - ###");
                 try (InputStream in = new FileInputStream(usersFile)) {
