@@ -173,7 +173,6 @@ public class Server {
             public void run() {
                 try {
                     semaphore.acquire();
-                    System.out.println("Acquired");
                 } catch (InterruptedException e1) {
                     // TODO Auto-generated catch block
                     e1.printStackTrace();
@@ -268,7 +267,6 @@ public class Server {
                 }
                 try {
                     semaphore.release();
-                    System.out.println("Released");
                 } catch (Exception e1) {
                     // TODO Auto-generated catch block
                     e1.printStackTrace();
@@ -369,6 +367,7 @@ class Connection extends Thread {
     String currentDir = "home";
     Properties userConfig = new Properties();
     String root = System.getProperty("user.dir").replace("\\", "/") + "/Users";
+    String retryFile = "none";
 
     public Connection(Socket commandClientSocket, int num) {
         try {
@@ -457,6 +456,7 @@ class Connection extends Thread {
                 try (OutputStream output = new FileOutputStream(
                         root + "/" + username + "/" + username + ".properties")) {
                     userConfig.setProperty("currentDir", "home");
+                    userConfig.setProperty("retryFile", "none");
                     userConfig.store(output, null);
                 } catch (IOException io) {
                     io.printStackTrace();
@@ -465,11 +465,17 @@ class Connection extends Thread {
                 try (InputStream input = new FileInputStream(root + "/" + username + "/" + username + ".properties")) {
                     userConfig.load(input);
                     currentDir = userConfig.getProperty("currentDir");
+                    retryFile = userConfig.getProperty("retryFile");
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
             }
-
+            if (retryFile.equals("none"))
+                out.writeUTF("none");
+            else {
+                out.writeUTF(retryFile);
+                getFile();
+            }
             auth = true;
         } catch (EOFException e) {
             System.out.println("EOF:" + e);
@@ -626,9 +632,21 @@ class Connection extends Thread {
                                 }
                                 send.close();
                                 out.writeUTF(currentDir);
-                            } catch (EOFException e) {
-                                System.out.println("EOF:" + e);
+                                try (OutputStream output = new FileOutputStream(
+                                        root + "/" + username + "/" + username + ".properties")) {
+                                    userConfig.setProperty("retryFile", "none");
+                                    userConfig.store(output, null);
+                                } catch (EOFException e) {
+                                    System.out.println("EOF:" + e);
+                                }
                             } catch (IOException e) {
+                                try (OutputStream output = new FileOutputStream(
+                                        root + "/" + username + "/" + username + ".properties")) {
+                                    userConfig.setProperty("retryFile", file);
+                                    userConfig.store(output, null);
+                                } catch (IOException io) {
+                                    io.printStackTrace();
+                                }
                                 System.out.println("IO:" + e);
                             }
                         }

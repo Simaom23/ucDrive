@@ -182,6 +182,11 @@ public class Client {
                 } else
                     System.out.println("Not valid!\n");
             }
+            String retry = in.readUTF();
+            if (!retry.equals("none")) {
+                System.out.println("Retry to download " + retry + "...");
+                getFile(retry);
+            }
         } catch (IOException e) {
             System.out.println("IO:" + e.getMessage());
         }
