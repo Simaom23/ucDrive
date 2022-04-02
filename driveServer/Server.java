@@ -589,49 +589,52 @@ class Connection extends Thread {
         try {
             // Receive filename
             String file = in.readUTF();
-            File f = new File(root + "/" + username + "/" + currentDir + "/" + file);
-            if (!file.equals("") || Files.isReadable(f.toPath())) {
+            if (!file.equals("")) {
+                File f = new File(root + "/" + username + "/" + currentDir + "/" + file);
+                if (Files.isReadable(f.toPath())) {
 
-                // Gives response to client saying it is downloadable and its size
-                out.writeUTF("true");
-                long fileLength = f.length();
-                out.writeUTF(Long.toString(fileLength));
+                    // Gives response to client saying it is downloadable and its size
+                    out.writeUTF("true");
+                    long fileLength = f.length();
+                    out.writeUTF(Long.toString(fileLength));
 
-                // Creates new thread that will send the file to the client
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50,
-                                Server.primaryAddress)) {
-                            Socket dataClientSocket = dataSocket.accept();
-                            OutputStream outData;
-                            outData = dataClientSocket.getOutputStream();
-                            FileInputStream send = new FileInputStream(
-                                    root + "/" + username + "/" + currentDir + "/" + file);
-                            BufferedInputStream bis = new BufferedInputStream(send);
-                            byte[] b;
-                            int byteSize = 1024;
-                            long sent = 0;
-                            while (sent < fileLength) {
-                                if (fileLength - sent >= byteSize)
-                                    sent += byteSize;
-                                else {
-                                    byteSize = (int) (fileLength - sent);
-                                    sent = fileLength;
+                    // Creates new thread that will send the file to the client
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50,
+                                    Server.primaryAddress)) {
+                                Socket dataClientSocket = dataSocket.accept();
+                                OutputStream outData;
+                                outData = dataClientSocket.getOutputStream();
+                                FileInputStream send = new FileInputStream(
+                                        root + "/" + username + "/" + currentDir + "/" + file);
+                                BufferedInputStream bis = new BufferedInputStream(send);
+                                byte[] b;
+                                int byteSize = 1024;
+                                long sent = 0;
+                                while (sent < fileLength) {
+                                    if (fileLength - sent >= byteSize)
+                                        sent += byteSize;
+                                    else {
+                                        byteSize = (int) (fileLength - sent);
+                                        sent = fileLength;
+                                    }
+                                    b = new byte[byteSize];
+                                    bis.read(b, 0, b.length);
+                                    outData.write(b, 0, b.length);
                                 }
-                                b = new byte[byteSize];
-                                bis.read(b, 0, b.length);
-                                outData.write(b, 0, b.length);
+                                send.close();
+                                out.writeUTF(currentDir);
+                            } catch (EOFException e) {
+                                System.out.println("EOF:" + e);
+                            } catch (IOException e) {
+                                System.out.println("IO:" + e);
                             }
-                            send.close();
-                            out.writeUTF(currentDir);
-                        } catch (EOFException e) {
-                            System.out.println("EOF:" + e);
-                        } catch (IOException e) {
-                            System.out.println("IO:" + e);
                         }
-                    }
-                }).start();
+                    }).start();
+                } else
+                    out.writeUTF("get: file does not exist");
             } else
                 out.writeUTF("get: file does not exist");
         } catch (EOFException e) {

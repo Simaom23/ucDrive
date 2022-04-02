@@ -340,73 +340,76 @@ public class Client {
 
             // Send the file name and size of the file
             out.writeUTF(file);
-            File f = new File(currentDir + "/" + file);
-            if (!file.equals("") || Files.isReadable(f.toPath())) {
-                long fileLength = f.length();
-                out.writeUTF(Long.toString(fileLength));
+            if (!file.equals("")) {
+                File f = new File(currentDir + "/" + file);
+                if (Files.isReadable(f.toPath())) {
+                    long fileLength = f.length();
+                    out.writeUTF(Long.toString(fileLength));
 
-                // Create new thread that will upload all the data to the server
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException e1) {
-                            e1.printStackTrace();
-                        }
-                        try (Socket d = new Socket(serverAddress, serverPort + 1)) {
-                            OutputStream outData;
-                            outData = d.getOutputStream();
-                            FileInputStream send = new FileInputStream(currentDir + "/" + file);
-                            BufferedInputStream bis = new BufferedInputStream(send);
-                            byte[] b;
-                            int byteSize = 1024;
-                            long sent = 0;
-                            // int lastProgress = 0;
-                            while (sent < fileLength) {
-                                if (fileLength - sent >= byteSize)
-                                    sent += byteSize;
-                                else {
-                                    byteSize = (int) (fileLength - sent);
-                                    sent = fileLength;
-                                }
-                                b = new byte[byteSize];
-                                bis.read(b, 0, b.length);
-                                outData.write(b, 0, b.length);
-
-                                /*
-                                 * Progress bar without threading
-                                 * int progress = (int) ((sent * 100) / fileLength);
-                                 * if (lastProgress != progress) {
-                                 * System.out.print(GREEN +
-                                 * "Uploading " + file + " [" + RESET);
-                                 * for (int i = 1; i < (int) (progress / 2); i++)
-                                 * System.out.print(GREEN + "#" + RESET);
-                                 * System.out.print(GREEN + "] " + progress + "%\r" + RESET);
-                                 * lastProgress = progress;
-                                 * }
-                                 */
+                    // Create new thread that will upload all the data to the server
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e1) {
+                                e1.printStackTrace();
                             }
-                            System.out.println(GREEN + "\n\n" + file + " Uploaded!" + RESET);
-                            send.close();
+                            try (Socket d = new Socket(serverAddress, serverPort + 1)) {
+                                OutputStream outData;
+                                outData = d.getOutputStream();
+                                FileInputStream send = new FileInputStream(currentDir + "/" + file);
+                                BufferedInputStream bis = new BufferedInputStream(send);
+                                byte[] b;
+                                int byteSize = 1024;
+                                long sent = 0;
+                                // int lastProgress = 0;
+                                while (sent < fileLength) {
+                                    if (fileLength - sent >= byteSize)
+                                        sent += byteSize;
+                                    else {
+                                        byteSize = (int) (fileLength - sent);
+                                        sent = fileLength;
+                                    }
+                                    b = new byte[byteSize];
+                                    bis.read(b, 0, b.length);
+                                    outData.write(b, 0, b.length);
 
-                            // Read new directory and display it
-                            String dir = in.readUTF();
-                            System.out.print(dir + "> ");
-                        } catch (EOFException e) {
-                            System.out.println("EOF:" + e);
-                        } catch (IOException e) {
-                            System.out.println("IO:" + e);
+                                    /*
+                                     * Progress bar without threading
+                                     * int progress = (int) ((sent * 100) / fileLength);
+                                     * if (lastProgress != progress) {
+                                     * System.out.print(GREEN +
+                                     * "Uploading " + file + " [" + RESET);
+                                     * for (int i = 1; i < (int) (progress / 2); i++)
+                                     * System.out.print(GREEN + "#" + RESET);
+                                     * System.out.print(GREEN + "] " + progress + "%\r" + RESET);
+                                     * lastProgress = progress;
+                                     * }
+                                     */
+                                }
+                                System.out.println(GREEN + "\n\n" + file + " Uploaded!" + RESET);
+                                send.close();
+
+                                // Read new directory and display it
+                                String dir = in.readUTF();
+                                System.out.print(dir + "> ");
+                            } catch (EOFException e) {
+                                System.out.println("EOF:" + e);
+                            } catch (IOException e) {
+                                System.out.println("IO:" + e);
+                            }
                         }
-                    }
-                }).start();
+                    }).start();
+                } else {
+                    out.writeUTF("cancel");
+                    System.out.println("put: file does not exist");
+                }
             } else {
                 out.writeUTF("cancel");
                 System.out.println("put: file does not exist");
             }
-        } catch (
-
-        IOException e) {
+        } catch (IOException e) {
             System.out.println("IO:" + e);
         }
     }
