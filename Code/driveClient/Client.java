@@ -267,8 +267,8 @@ public class Client {
                 if (currentDir.charAt(currentDir.length() - 1) == ':')
                     currentDir = currentDir + "/";
             }
-        } else if (newDir.equals("/"))
-            currentDir = "C:/";
+        } else if (newDir.equals("/") || newDir.equals("."))
+            currentDir = "/";
         else if (!newDir.equals(".")) {
             newDir.replace("[/\\<>:\"|?*]", "%20");
             File dir = new File(currentDir + "/" + newDir);
