@@ -4,6 +4,17 @@
 
 Para instalar o ucDrive deverão colocar os ficheiros server.jar dentro de uma pasta chamada driveServer e o terminal.jar dentro de uma pasta chamada driveClient.
 
+### Ficheiro settings.properties:
+
+Os endereços e portos dos servidores, primário e secundário, deverão ser colocados da seguinte forma:
+
+- primary.server="primaryAddress"
+- primary.port="primaryPort"
+- secondary.server="secondaryAddress"
+- secondary.port="secondaryPort"
+
+Os nomes entre aspas deverão ser substituidos pelos respetivos endereços e portos, por exemplo, primary.server=0.0.0.0 e primary.port=6700.
+
 ### Ficheiro users.properties:
 
 Cada utilizador deverá ser colocado no ficheiro da seguinta forma:
