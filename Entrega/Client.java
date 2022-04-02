@@ -1,5 +1,3 @@
-package driveClient;
-
 import java.net.*;
 import java.io.*;
 import java.nio.file.Files;
@@ -9,7 +7,7 @@ import java.util.Scanner;
 public class Client {
     private static final String GREEN = "\u001B[32m";
     private static final String RESET = "\u001B[0m";
-    private static String config = "driveClient/settings.properties";
+    private static String config = "settings.properties";
     private static String currentDir = System.getProperty("user.dir").replace("\\", "/");
     private static Properties server = new Properties();
     private static String serverAddress;
@@ -269,8 +267,8 @@ public class Client {
                 if (currentDir.charAt(currentDir.length() - 1) == ':')
                     currentDir = currentDir + "/";
             }
-        } else if (newDir.equals("/"))
-            currentDir = "C:/";
+        } else if (newDir.equals("/") || newDir.equals("."))
+            currentDir = "/";
         else if (!newDir.equals(".")) {
             newDir.replace("[/\\<>:\"|?*]", "%20");
             File dir = new File(currentDir + "/" + newDir);
