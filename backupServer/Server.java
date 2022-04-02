@@ -4,6 +4,7 @@ import java.net.*;
 import java.io.*;
 import java.nio.file.Files;
 import java.util.Properties;
+import java.util.concurrent.Semaphore;
 
 // Primary server
 public class Server {
@@ -11,16 +12,18 @@ public class Server {
     public static int primaryPort;
     public static int primaryDataPort;
     private static int primaryUdpPort;
-    
+
     public static InetAddress secondaryAddress;
     private static int secondaryPort;
     public static int secondaryDataPort;
     private static int secondaryUdpPort;
 
-    public static String usersFile = "backupServer/users.properties";
-    public static String confFile = "backupServer/conf.properties";
+    private static String root = System.getProperty("user.dir").replace("\\", "/");
+    public static String usersFile = "users.properties";
+    public static String confFile = "conf.properties";
     public static Properties users = new Properties();
     public static Properties conf = new Properties();
+    public static Semaphore semaphore = new Semaphore(1);
 
     public static void main(String args[]) {
         try (InputStream in = new FileInputStream(confFile)) {
@@ -31,12 +34,12 @@ public class Server {
             primaryPort = Integer.parseInt(conf.getProperty("primary.port"));
             primaryDataPort = Integer.parseInt(conf.getProperty("primary.port")) + 1;
             primaryUdpPort = Integer.parseInt(conf.getProperty("primary.udp"));
-            
+
             secondaryAddress = InetAddress.getByName(conf.getProperty("secondary.address"));
             secondaryPort = Integer.parseInt(conf.getProperty("secondary.port"));
             secondaryDataPort = Integer.parseInt(conf.getProperty("secondary.port")) + 1;
             secondaryUdpPort = Integer.parseInt(conf.getProperty("secondary.udp"));
-        
+
         } catch (IOException ex) {
             ex.printStackTrace();
         } catch (NumberFormatException e) {
@@ -49,8 +52,8 @@ public class Server {
         pong();
 
         try (ServerSocket listenSocket = new ServerSocket(primaryPort, 50, primaryAddress)) {
+            sendBackup(confFile);
             sendBackup(usersFile);
-            //sendBackup(confFile);
             System.out.println("Listening On -> " + listenSocket);
             System.out.println("### - ucDrive Server Info - ###");
             try (InputStream in = new FileInputStream(usersFile)) {
@@ -59,6 +62,7 @@ public class Server {
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
+
             while (true) {
                 Socket clientCommandSocket = listenSocket.accept();
                 num++;
@@ -76,7 +80,7 @@ public class Server {
             @Override
             public void run() {
                 try (DatagramSocket aSocket = new DatagramSocket(primaryUdpPort + 2)) {
-                    while(true){
+                    while (true) {
                         try {
                             byte[] b;
                             DatagramPacket dp;
@@ -90,8 +94,6 @@ public class Server {
                             b = dp.getData();
                             String fileName = new String(b, 0, dp.getLength());
                             int port = dp.getPort();
-
-                            System.out.println(fileName);
 
                             // Send ACKN
                             b = s.getBytes();
@@ -107,8 +109,6 @@ public class Server {
                             b = dp.getData();
                             String sizeString = new String(b, 0, dp.getLength());
 
-                            System.out.println(sizeString);
-
                             // Send ACKN
                             b = s.getBytes();
                             dp = new DatagramPacket(b, b.length, secondaryAddress,
@@ -117,8 +117,16 @@ public class Server {
 
                             // Create File Stream
                             long fileLength = Long.parseLong(sizeString);
-                            File f = new File("backupServer/" + fileName);
-                            FileOutputStream out = new FileOutputStream(f);
+                            String[] dirs = fileName.split("/");
+                            String dir = "";
+                            for (int i = 0; i < dirs.length - 1; i++) {
+                                dir += dirs[i] + "/";
+                            }
+                            File f = new File(dir);
+                            if (!f.exists() && !f.isDirectory())
+                                f.mkdirs();
+
+                            FileOutputStream out = new FileOutputStream(root + "/" + fileName);
                             BufferedOutputStream bos = new BufferedOutputStream(out);
 
                             // Receive File via UDP
@@ -155,23 +163,29 @@ public class Server {
         }).start();
     }
 
-    // This is the function responsible for the file synchronization amidst the 2 servers
+    // This is the function responsible for the file synchronization amidst the 2
+    // servers
     public static void sendBackup(String f) {
 
         // Creates new thread to send the updated file to the secondary server
         new Thread(new Runnable() {
             @Override
             public void run() {
+                try {
+                    semaphore.acquire();
+                    System.out.println("Acquired");
+                } catch (InterruptedException e1) {
+                    // TODO Auto-generated catch block
+                    e1.printStackTrace();
+                }
                 try (DatagramSocket aSocket = new DatagramSocket()) {
                     byte[] b;
                     DatagramPacket dp;
 
                     // Send File Name
-                    File newFile = new File(f);
-                    String[] fileDir = f.split("/");
-                    String fileName = fileDir[fileDir.length - 1];
-                    while(true){
-                        b = fileName.getBytes();
+                    File newFile = new File(root + "/" + f);
+                    while (true) {
+                        b = f.getBytes();
                         dp = new DatagramPacket(b, b.length, secondaryAddress,
                                 secondaryUdpPort + 2);
                         aSocket.send(dp);
@@ -252,12 +266,19 @@ public class Server {
                 } catch (IOException e) {
                     System.out.println(e);
                 }
+                try {
+                    semaphore.release();
+                    System.out.println("Released");
+                } catch (Exception e1) {
+                    // TODO Auto-generated catch block
+                    e1.printStackTrace();
+                }
             }
         }).start();
     }
 
     private static void ping() {
-        while(true){
+        while (true) {
             try (DatagramSocket aSocket = new DatagramSocket(primaryUdpPort)) {
 
                 receiveBackup();
@@ -347,7 +368,7 @@ class Connection extends Thread {
     String username;
     String currentDir = "home";
     Properties userConfig = new Properties();
-    String root = System.getProperty("user.dir").replace("\\", "/") + "/backupServer/Users";
+    String root = System.getProperty("user.dir").replace("\\", "/") + "/Users";
 
     public Connection(Socket commandClientSocket, int num) {
         try {
@@ -414,7 +435,7 @@ class Connection extends Thread {
             while (true) {
 
                 // Receives username from client and password from client
-                username = in.readUTF(); 
+                username = in.readUTF();
                 String password = in.readUTF();
 
                 // Checks the credentials and responds to the client
@@ -463,11 +484,12 @@ class Connection extends Thread {
             // Gets current password to check if it is right
             String currentPasswd = in.readUTF();
             if (currentPasswd.equals(users.getProperty(username + ".password"))) {
-                
+
                 // Respond to client saying the password is correct
                 out.writeUTF("true");
 
-                // Reads new password and verification and parses them responding to the client in the end
+                // Reads new password and verification and parses them responding to the client
+                // in the end
                 String newPasswd = in.readUTF();
                 String rePasswd = in.readUTF();
                 if (newPasswd.equals(rePasswd))
@@ -492,6 +514,7 @@ class Connection extends Thread {
         } catch (IOException e) {
             System.out.println("IO:" + e);
         }
+        Server.sendBackup("users.properties");
     }
 
     private void listFiles() {
@@ -553,6 +576,8 @@ class Connection extends Thread {
             } catch (IOException io) {
                 io.printStackTrace();
             }
+
+            Server.sendBackup("Users/" + username + "/" + username + ".properties");
         } catch (EOFException e) {
             System.out.println("EOF:" + e);
         } catch (IOException e) {
@@ -564,20 +589,20 @@ class Connection extends Thread {
         try {
             // Receive filename
             String file = in.readUTF();
-
             File f = new File(root + "/" + username + "/" + currentDir + "/" + file);
-            if (Files.isReadable(f.toPath())) {
-                
+            if (!file.equals("") || Files.isReadable(f.toPath())) {
+
                 // Gives response to client saying it is downloadable and its size
                 out.writeUTF("true");
                 long fileLength = f.length();
                 out.writeUTF(Long.toString(fileLength));
-                
+
                 // Creates new thread that will send the file to the client
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50, Server.primaryAddress)) {
+                        try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50,
+                                Server.primaryAddress)) {
                             Socket dataClientSocket = dataSocket.accept();
                             OutputStream outData;
                             outData = dataClientSocket.getOutputStream();
@@ -625,11 +650,13 @@ class Connection extends Thread {
 
             if (!answer.equals("cancel")) {
 
-                // Creates the new thread that will receive all the data from the client and create the respective file
+                // Creates the new thread that will receive all the data from the client and
+                // create the respective file
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50, Server.primaryAddress)) {
+                        try (ServerSocket dataSocket = new ServerSocket(Server.primaryDataPort, 50,
+                                Server.primaryAddress)) {
                             Socket dataClientSocket = dataSocket.accept();
                             InputStream inData;
                             inData = dataClientSocket.getInputStream();
@@ -650,7 +677,8 @@ class Connection extends Thread {
                             bos.flush();
                             newFile.close();
                             out.writeUTF(currentDir);
-                            Server.sendBackup(root + "/" + username + "/" + currentDir + "/"
+
+                            Server.sendBackup("Users/" + username + "/" + currentDir + "/"
                                     + fileName[fileName.length - 1]);
                         } catch (IOException e) {
                             System.out.println("IO:" + e.getMessage());

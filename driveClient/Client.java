@@ -104,11 +104,17 @@ public class Client {
                                 break;
 
                             case "get":
-                                getFile(command[1]);
+                                if (command.length != 1)
+                                    getFile(command[1]);
+                                else
+                                    getFile("");
                                 break;
 
                             case "put":
-                                putFile(command[1]);
+                                if (command.length != 1)
+                                    putFile(command[1]);
+                                else
+                                    putFile("");
                                 break;
 
                             case "server -primary":
@@ -121,7 +127,6 @@ public class Client {
                                 break;
 
                             case "exit":
-
                                 exit = true;
                                 break;
                         }
@@ -135,7 +140,7 @@ public class Client {
                 } catch (EOFException e) {
                     System.out.println("EOF: " + e.getMessage());
                 } catch (IOException e) {
-                    
+
                     // Switch servers automatically when they are down
                     if (primary) {
                         primary = false;
@@ -213,7 +218,7 @@ public class Client {
             // Print files
             String[] fileList = files.split(" ");
 
-            if(fileList.length == 1 && fileList[0].equals(""))
+            if (fileList.length == 1 && fileList[0].equals(""))
                 return;
 
             for (String file : fileList) {
@@ -336,7 +341,7 @@ public class Client {
             // Send the file name and size of the file
             out.writeUTF(file);
             File f = new File(currentDir + "/" + file);
-            if (Files.isReadable(f.toPath())) {
+            if (!file.equals("") || Files.isReadable(f.toPath())) {
                 long fileLength = f.length();
                 out.writeUTF(Long.toString(fileLength));
 
