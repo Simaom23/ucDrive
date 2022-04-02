@@ -2,7 +2,51 @@
 
 ## Instalar o ucDrive:
 
-Para instalar o ucDrive deverão colocar os ficheiros server.jar dentro de uma pasta chamada driveServer e o terminal.jar dentro de uma pasta chamada driveClient.
+Servidor Primário e Secundário:
+
+- Para instalar o ucDrive deverão colocar os ficheiros que estão no interior da pasta serverClient numa pasta à vossa escolha;
+- Para correr a aplicação servidor deverão usar o terminal com java -jar ucDrive.jar no diretório onde foi colocado o conteúdo.
+
+Cliente:
+
+- Para instalar o cliente deverão colocar os ficheiros que estão no interior da pasta driveClient numa pasta à vossa escolha;
+- Para correr a aplicação cliente deverão usar o terminal com java -jar terminal.jar no diretório onde foi colocado o conteúdo.
+
+### Ficheiro settings.properties:
+
+Os endereços e portos dos servidores, primário e secundário, deverão ser colocados da seguinte forma:
+
+- primary.server="primaryAddress"
+- primary.port="primaryPort"
+- secondary.server="secondaryAddress"
+- secondary.port="secondaryPort"
+
+Os nomes entre aspas deverão ser substituidos pelos respetivos endereços e portos, por exemplo, primary.server=0.0.0.0 e primary.port=6700.
+
+### Ficheiro users.properties:
+
+Cada utilizador deverá ser colocado no ficheiro da seguinta forma:
+
+- "username".password="password"
+- "username".cclife="cclife"
+- "username".address="address"
+- "username".cellphone="cellphone"
+- "username".department="department"
+
+Os nomes entre aspas deverão ser substituidos pelo pretendido, por exemplo bob.password=iambob.
+
+### Ficheiro conf.properties:
+
+Os endereços e portos dos servidores, primário e secundário, deverão ser colocados da seguinte forma:
+
+- primary.server="primaryAddress"
+- primary.port="primaryPort"
+- primary.udp="primaryUdpPort"
+- secondary.server="secondaryAddress"
+- secondary.port="secondaryPort"
+- secondary.udp="secondaryUdpPort"
+
+Os nomes entre aspas deverão ser substituidos pelos respetivos endereços e portos, por exemplo, primary.server=0.0.0.0 e primary.port=6700.
 
 ## Utilização e comandos:
 
