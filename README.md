@@ -2,6 +2,8 @@
 
 ## Instalar o ucDrive:
 
+Para instalar o ucDrive deverão colocar os ficheiros server.jar dentro de uma pasta chamada driveServer e o terminal.jar dentro de uma pasta chamada driveClient.
+
 ## Utilização e comandos:
 
 - **passwd** -> permite ao utilizador mudar a sua password
