@@ -16,7 +16,7 @@ failover.
 
 Servidor Primário e Secundário:
 
-- Para instalar o ucDrive deverão colocar os ficheiros que estão no interior da pasta serverClient numa pasta à vossa escolha;
+- Para instalar o servidor deverão colocar os ficheiros que estão no interior da pasta serverClient numa pasta à vossa escolha;
 - Para correr a aplicação servidor deverão usar o terminal com java -jar ucDrive.jar no diretório onde foi colocado o conteúdo.
 
 Cliente:
