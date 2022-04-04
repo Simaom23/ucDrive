@@ -1,7 +1,12 @@
 # ucDrive
 A plataforma ucDrive permite realizar todas as operações indispensáveis para
-que os utilizadores possam armazenar de maneira simples os seus ficheiros. Permite, então efetuar operações como: carregar um ficheiro,
-descarregar um ficheiro e listar ficheiros.
+que os utilizadores possam armazenar de maneira simples os seus ficheiros num servidor remoto. 
+
+Permite, então efetuar operações como: 
+- Carregar um ficheiro
+- Descarregar um ficheiro
+- Listar ficheiros
+- Mudar de diretórios
 
 Como todo e qualquer software está sujeito a falhas, a plataforma ucDrive considera a possibilidade
 de ocorrência de falhas e lida com estas de forma adequada através de mecanismos de
