@@ -68,7 +68,7 @@ Os nomes entre aspas deverão ser substituidos pelos respetivos endereços e por
   - **cd ..** -> Volta um diretorio atrás
   - **cd .** ou **cd /** ou **cd home** -> Volta ao diretorio home
   - É possivel percorrer mais que um diretorio de uma vez com **cd /diretorio1/diretorio2...**
-- **ls -p** -> permite listar os ficheiro da atual dirtoria local
+- **ls -p** -> permite listar os ficheiro da atual diretoria local
 - **cd -p** -> permite alterar a diretoria local
   - **cd ..** -> Volta um diretorio atrás
   - **cd .** ou **cd /** ou **cd home** -> Volta ao diretorio root local
