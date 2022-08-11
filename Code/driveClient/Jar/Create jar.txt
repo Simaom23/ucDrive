@@ -1,3 +1,0 @@
-javac Server.java -> Create class files
-jar cfm Server.jar Manifest.txt *.class -> Create jar file
-java -jar Server.jar -> Run jar file
